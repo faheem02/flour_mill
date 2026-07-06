@@ -1,0 +1,147 @@
+<?php
+session_start();
+require_once '../../includes/config.php';
+if (!isset($_SESSION['user_id'])) { header("Location: " . $base_url . "auth/login.php"); exit; }
+$active_page = 'purchase_add';
+$page_title = 'New Purchase';
+require_once '../../includes/db.php';
+include '../../includes/header.php';
+
+$error = $success = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $supplier_id = (int)$_POST['supplier_id'];
+    $date = $_POST['date'];
+    $invoice_no = sanitize($_POST['invoice_no']);
+    $product_name = sanitize($_POST['product_name']);
+    $total_qty = str_replace(',', '', $_POST['total_qty']);
+    $rate_per_kg = str_replace(',', '', $_POST['rate_per_kg']);
+    $total_amount = str_replace(',', '', $_POST['total_amount']);
+    $paid_amount = str_replace(',', '', $_POST['paid_amount']);
+
+    if ($total_qty <= 0) { $error = "Quantity must be greater than zero."; }
+    else {
+        $conn->begin_transaction();
+        try {
+            $stmt = $conn->prepare("INSERT INTO purchases (supplier_id, date, invoice_no, product_name, total_qty, rate_per_kg, total_amount, paid_amount)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("isssdddd", $supplier_id, $date, $invoice_no, $product_name, $total_qty, $rate_per_kg, $total_amount, $paid_amount);
+            $stmt->execute();
+            $pid = $conn->insert_id;
+
+            // Supplier ledger: debit (we owe them)
+            $stmt2 = $conn->prepare("INSERT INTO supplier_ledger (supplier_id, date, type, reference_id, debit, balance, notes)
+                VALUES (?, ?, 'purchase', ?, ?, (SELECT COALESCE(balance,0)+? FROM suppliers WHERE id=?), 'Purchase - $invoice_no')");
+            $stmt2->bind_param("isiddi", $supplier_id, $date, $pid, $total_amount, $total_amount, $supplier_id);
+            $stmt2->execute();
+
+            // Update supplier balance
+            $conn->query("UPDATE suppliers SET balance = balance + $total_amount WHERE id = $supplier_id");
+
+            // Auto journal entry
+            autoJournalEntry($date, "Wheat purchase from supplier (Inv: $invoice_no)",
+                [17 => $total_amount], // Purchase of Wheat (expense)
+                [$total_amount > 0 && $paid_amount > 0 ? 2 : 8 => $total_amount], // Cash or Supplier Payable
+                $_SESSION['user_id']
+            );
+
+            if ($paid_amount > 0) {
+                $conn->query("INSERT INTO supplier_ledger (supplier_id, date, type, reference_id, credit, balance, notes)
+                    VALUES ($supplier_id, '$date', 'payment', $pid, $paid_amount, (SELECT COALESCE(balance,0)-$paid_amount FROM suppliers WHERE id=$supplier_id), 'Payment on purchase')");
+                $conn->query("UPDATE suppliers SET balance = balance - $paid_amount WHERE id = $supplier_id");
+            }
+
+            $conn->commit();
+            $success = "Purchase recorded successfully.";
+        } catch (Exception $e) {
+            $conn->rollback();
+            $error = "Error: " . $e->getMessage();
+        }
+    }
+}
+
+$suppliers = $conn->query("SELECT id, name FROM suppliers ORDER BY name");
+?>
+<div class="d-sm-flex align-items-center justify-content-between mb-4">
+    <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-shopping-cart mr-1"></i> New Wheat Purchase</h1>
+    <a href="list.php" class="btn btn-sm btn-secondary"><i class="fas fa-arrow-left mr-1"></i> Back to List</a>
+</div>
+
+<?php if ($error): ?><div class="alert alert-danger"><?= $error ?></div><?php endif; ?>
+<?php if ($success): ?><div class="alert alert-success alert-auto"><?= $success ?></div><?php endif; ?>
+
+<div class="card shadow mb-4">
+    <div class="card-header"><h6 class="font-weight-bold m-0">Purchase Details</h6></div>
+    <div class="card-body">
+        <form method="POST" id="purchaseForm">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>Supplier <span class="text-danger">*</span></label>
+                        <select name="supplier_id" class="form-control" required>
+                            <option value="">Select Supplier</option>
+                            <?php while ($s = $suppliers->fetch_assoc()): ?>
+                            <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['name']) ?></option>
+                            <?php endwhile; ?>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Date <span class="text-danger">*</span></label>
+                        <input type="date" name="date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label>Invoice No.</label>
+                        <input type="text" name="invoice_no" class="form-control" value="<?= generatePurchaseNo() ?>">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Product / Item <span class="text-danger">*</span></label>
+                        <input type="text" name="product_name" class="form-control" value="Wheat (Gandam)" required>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Quantity (KG) <span class="text-danger">*</span></label>
+                        <input type="text" name="total_qty" class="form-control" placeholder="0" required oninput="calcPurchase()">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Rate per KG</label>
+                        <input type="text" name="rate_per_kg" class="form-control" placeholder="0.00" oninput="calcPurchase()">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Total Amount</label>
+                        <input type="text" name="total_amount" class="form-control" placeholder="0.00" readonly style="background:#f5f5f5;font-weight:bold">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Paid Amount</label>
+                        <input type="text" name="paid_amount" class="form-control" placeholder="0.00" oninput="this.value = this.value.replace(/[^0-9.]/g,'')">
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save Purchase</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function calcPurchase() {
+    var qty = parseFloat($('input[name="total_qty"]').val()) || 0;
+    var rate = parseFloat($('input[name="rate_per_kg"]').val()) || 0;
+    $('input[name="total_amount"]').val((qty * rate).toFixed(2));
+}
+</script>
+
+<?php include '../../includes/footer.php'; ?>
