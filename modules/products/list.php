@@ -24,7 +24,10 @@ $result = $conn->query("SELECT p.*,
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-boxes mr-1"></i> Products</h1>
-    <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#addModal"><i class="fas fa-plus-circle mr-1"></i> Add Product</button>
+    <div>
+        <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#addModal"><i class="fas fa-plus-circle mr-1"></i> Add Product</button>
+        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+    </div>
 </div>
 
 <?php if (isset($success)): ?><div class="alert alert-success alert-auto"><?= $success ?></div><?php endif; ?>

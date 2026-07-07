@@ -27,7 +27,10 @@ $bank_accounts = $conn->query("SELECT id, account_name, bank_name, account_no, b
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-university mr-1"></i> Bank Book</h1>
-    <span class="font-weight-bold">Total Balance: Rs <?= money($bank_balance) ?></span>
+    <div>
+        <span class="font-weight-bold">Total Balance: Rs <?= money($bank_balance) ?></span>
+        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+    </div>
 </div>
 
 <div class="row">

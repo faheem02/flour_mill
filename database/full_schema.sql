@@ -13,7 +13,56 @@ CREATE TABLE users (
     password    VARCHAR(255) NOT NULL,
     name        VARCHAR(100),
     role        ENUM('admin','user') DEFAULT 'user',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- 27. FARMERS (Wheat growers - used in booking system)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS farmers (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(150) NOT NULL,
+    phone       VARCHAR(20),
+    village     VARCHAR(100),
+    city        VARCHAR(100),
+    balance     DECIMAL(12,2) DEFAULT 0.00,
+    status      ENUM('active','inactive') DEFAULT 'active',
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- 28. BOOKINGS (Wheat booking from farmers)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS bookings (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    booking_no      VARCHAR(50) NOT NULL UNIQUE,
+    farmer_id       INT NOT NULL,
+    date            DATE NOT NULL,
+    booked_qty      DECIMAL(12,3) NOT NULL DEFAULT 0,
+    received_qty    DECIMAL(12,3) DEFAULT 0,
+    rate            DECIMAL(10,2) DEFAULT 0,
+    advance_amount  DECIMAL(12,2) DEFAULT 0,
+    expected_date   DATE DEFAULT NULL,
+    status          ENUM('pending','partial','completed','cancelled') DEFAULT 'pending',
+    notes           TEXT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (farmer_id) REFERENCES farmers(id)
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- 29. FARMER PAYMENTS (Advance / Remaining payment tracking)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS farmer_payments (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    farmer_id   INT NOT NULL,
+    date        DATE NOT NULL,
+    amount      DECIMAL(12,2) NOT NULL,
+    type        ENUM('advance','payment') DEFAULT 'payment',
+    booking_id  INT DEFAULT NULL,
+    notes       TEXT,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (farmer_id) REFERENCES farmers(id),
+    FOREIGN KEY (booking_id) REFERENCES bookings(id)
 ) ENGINE=InnoDB;
 
 -- ============================================================
@@ -53,7 +102,8 @@ CREATE TABLE purchases (
     id             INT AUTO_INCREMENT PRIMARY KEY,
     supplier_id    INT NOT NULL,
     date           DATE NOT NULL,
-    invoice_no     VARCHAR(50),
+    invoice_no      VARCHAR(50),
+    product_name    VARCHAR(150) DEFAULT 'Wheat (Gandam)',
     total_qty      DECIMAL(12,3) DEFAULT 0.000,
     rate_per_kg    DECIMAL(10,2) DEFAULT 0.00,
     total_amount   DECIMAL(12,2) DEFAULT 0.00,
@@ -88,10 +138,61 @@ CREATE TABLE products (
     category       VARCHAR(50),
     unit           VARCHAR(20) DEFAULT 'KG',
     sale_price     DECIMAL(10,2) DEFAULT 0.00,
+    cost_rate      DECIMAL(10,2) DEFAULT 0.00,
     stock_qty      DECIMAL(12,3) DEFAULT 0.000,
-    status         ENUM('active','inactive') DEFAULT 'active',
-    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    status          ENUM('active','inactive') DEFAULT 'active',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
+
+-- ============================================================
+-- 27. WAREHOUSE STOCK (Product stock per warehouse)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS warehouse_stock (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    warehouse_id    INT NOT NULL,
+    product_id      INT NOT NULL,
+    stock_qty       DECIMAL(12,3) DEFAULT 0.000,
+    UNIQUE KEY (warehouse_id, product_id),
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id),
+    FOREIGN KEY (product_id) REFERENCES products(id)
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- 28. WHEAT ARRIVALS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS wheat_arrivals (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    booking_id      INT DEFAULT NULL,
+    date            DATE NOT NULL,
+    supplier_id     INT DEFAULT NULL,
+    warehouse_id    INT DEFAULT NULL,
+    vehicle_id      INT DEFAULT NULL,
+    driver_id       INT DEFAULT NULL,
+    bag_type_id     INT DEFAULT NULL,
+    num_bags        INT DEFAULT 0,
+    gross_weight    DECIMAL(12,3) DEFAULT 0,
+    bag_weight      DECIMAL(12,3) DEFAULT 0,
+    net_weight      DECIMAL(12,3) DEFAULT 0,
+    moisture_pct    DECIMAL(5,2) DEFAULT 0,
+    quality_grade   VARCHAR(50),
+    broker_id       INT DEFAULT NULL,
+    notes           TEXT,
+    status          ENUM('pending','completed','cancelled') DEFAULT 'completed',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (booking_id) REFERENCES bookings(id),
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id),
+    FOREIGN KEY (vehicle_id) REFERENCES vehicles(id),
+    FOREIGN KEY (driver_id) REFERENCES drivers(id),
+    FOREIGN KEY (bag_type_id) REFERENCES bag_types(id),
+    FOREIGN KEY (broker_id) REFERENCES brokers(id)
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- Alter stock_ledger to add warehouse tracking
+-- ============================================================
+-- ALTER TABLE stock_ledger ADD COLUMN warehouse_id INT DEFAULT NULL AFTER reference_id;
+-- ALTER TABLE stock_ledger ADD FOREIGN KEY (warehouse_id) REFERENCES warehouses(id);
 
 -- ============================================================
 -- 7. PRODUCTIONS (Gandam crush record)
@@ -210,6 +311,7 @@ CREATE TABLE stock_ledger (
     date            DATE NOT NULL,
     type            ENUM('production','sale','sale_return','adjustment','opening') NOT NULL,
     reference_id    INT DEFAULT NULL,
+    warehouse_id    INT DEFAULT NULL,
     qty_in          DECIMAL(12,3) DEFAULT 0.000,
     qty_out         DECIMAL(12,3) DEFAULT 0.000,
     balance_qty     DECIMAL(12,3) DEFAULT 0.000,
@@ -374,3 +476,71 @@ INSERT INTO chart_of_accounts (code, name, type, parent_id) VALUES
 INSERT INTO bank_accounts (account_name, bank_name, account_no) VALUES
 ('Main Cash', 'Cash', 'CASH-001'),
 ('HBL Current Account', 'Habib Bank Ltd', 'HBL-1234-5678');
+
+-- ============================================================
+-- 22. VEHICLES (Master)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS vehicles (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    vehicle_no      VARCHAR(50) NOT NULL,
+    vehicle_type    VARCHAR(50),
+    owner_name      VARCHAR(150),
+    driver_name     VARCHAR(150),
+    driver_mobile   VARCHAR(20),
+    capacity_kg     DECIMAL(12,2) DEFAULT 0,
+    status          ENUM('active','inactive') DEFAULT 'active',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- 23. DRIVERS (Master)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS drivers (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    name            VARCHAR(150) NOT NULL,
+    cnic            VARCHAR(20),
+    mobile          VARCHAR(20),
+    license_no      VARCHAR(50),
+    address         TEXT,
+    status          ENUM('active','inactive') DEFAULT 'active',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- 24. BAG TYPES (Master)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS bag_types (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    name            VARCHAR(100) NOT NULL,
+    bag_weight_kg   DECIMAL(10,2) DEFAULT 0,
+    empty_bag_cost  DECIMAL(10,2) DEFAULT 0,
+    status          ENUM('active','inactive') DEFAULT 'active',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- 25. BROKERS (Master)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS brokers (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    name            VARCHAR(150) NOT NULL,
+    commission_rate DECIMAL(5,2) DEFAULT 0,
+    mobile          VARCHAR(20),
+    address         TEXT,
+    status          ENUM('active','inactive') DEFAULT 'active',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- 26. WAREHOUSES (Master)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS warehouses (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    code            VARCHAR(20) NOT NULL,
+    name            VARCHAR(150) NOT NULL,
+    location        VARCHAR(200),
+    capacity_kg     DECIMAL(12,2) DEFAULT 0,
+    type            ENUM('wheat','finished','packing','general') DEFAULT 'general',
+    status          ENUM('active','inactive') DEFAULT 'active',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;

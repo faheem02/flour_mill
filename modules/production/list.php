@@ -14,6 +14,7 @@ $result = $conn->query("SELECT p.* FROM productions p ORDER BY p.date DESC, p.id
     <div>
         <a href="add.php" class="btn btn-primary btn-sm"><i class="fas fa-plus-circle mr-1"></i> New Crush</a>
         <a href="report.php" class="btn btn-info btn-sm"><i class="fas fa-chart-bar mr-1"></i> Extraction Report</a>
+        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
     </div>
 </div>
 

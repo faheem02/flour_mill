@@ -14,6 +14,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $date = $_POST['date'];
     $invoice_no = sanitize($_POST['invoice_no']);
     $paid_amount = str_replace(',', '', $_POST['paid_amount']);
+    $warehouse_id = (int)$_POST['warehouse_id'];
+    $vehicle_id = (int)$_POST['vehicle_id'];
+    $driver_id = (int)$_POST['driver_id'];
+    $broker_id = (int)$_POST['broker_id'];
 
     $product_ids = $_POST['product_id'];
     $qtys = $_POST['qty'];
@@ -28,6 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($total_qty <= 0) { $error = "At least one product is required."; }
+    elseif ($warehouse_id <= 0) { $error = "Please select a warehouse."; }
     else {
         $conn->begin_transaction();
         try {
@@ -37,8 +42,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sale_id = $conn->insert_id;
 
             $stmt2 = $conn->prepare("INSERT INTO sale_items (sale_id, product_id, qty, rate, amount) VALUES (?, ?, ?, ?, ?)");
-            $stmt3 = $conn->prepare("INSERT INTO stock_ledger (product_id, date, type, reference_id, qty_out, balance_qty, notes)
-                VALUES (?, ?, 'sale', ?, ?, (SELECT COALESCE(stock_qty,0) FROM products WHERE id=?), 'Sale - $invoice_no')");
+            $stmt3 = $conn->prepare("INSERT INTO stock_ledger (product_id, date, type, reference_id, warehouse_id, qty_out, balance_qty, notes)
+                VALUES (?, ?, 'sale', ?, ?, ?, (SELECT COALESCE(stock_qty,0) FROM products WHERE id=?), 'Sale - $invoice_no')");
 
             foreach ($product_ids as $i => $pid) {
                 $q = str_replace(',', '', $qtys[$i]);
@@ -49,11 +54,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt2->bind_param("iiddd", $sale_id, $pid, $q, $r, $a);
                 $stmt2->execute();
 
-                // Reduce product stock
                 $conn->query("UPDATE products SET stock_qty = stock_qty - $q WHERE id = $pid");
 
-                // Stock ledger
-                $stmt3->bind_param("isiii", $pid, $date, $sale_id, $q, $pid);
+                // Deduct from warehouse stock
+                $conn->query("UPDATE warehouse_stock SET stock_qty = GREATEST(stock_qty - $q, 0) WHERE warehouse_id = $warehouse_id AND product_id = $pid");
+
+                $stmt3->bind_param("isiiii", $pid, $date, $sale_id, $warehouse_id, $q, $pid);
                 $stmt3->execute();
             }
 
@@ -70,13 +76,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $conn->query("UPDATE customers SET balance = balance - $paid_amount WHERE id = $customer_id");
             }
 
-            // Auto journal entry
             $cash_amt = $paid_amount > 0 ? $paid_amount : 0;
             $receivable_amt = $total_amount - $cash_amt;
             $debits = [];
-            $credits = [13 => $total_amount]; // Sales Revenue
+            $credits = [13 => $total_amount];
             if ($cash_amt > 0) $debits[2] = $cash_amt;
-            if ($receivable_amt > 0) $debits[5] = $receivable_amt; // Accounts Receivable
+            if ($receivable_amt > 0) $debits[5] = $receivable_amt;
             autoJournalEntry($date, "Sale to customer (Inv: $invoice_no)", $debits, $credits, $_SESSION['user_id']);
 
             $conn->commit();
@@ -94,7 +99,11 @@ $products = $conn->query("SELECT p.id, p.name, p.sale_price, p.cost_rate, p.stoc
    JOIN productions pr ON pi.production_id = pr.id 
    WHERE pi.product_id = p.id 
    ORDER BY pr.date DESC, pr.id DESC LIMIT 1) as latest_cost_rate
-  FROM products p WHERE status='active' AND stock_qty > 0 ORDER BY name");
+  FROM products p WHERE status='active' AND name != 'Wheat (Gandam)' AND stock_qty > 0 ORDER BY name");
+$warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active' AND type IN ('finished','general') ORDER BY name");
+$vehicles = $conn->query("SELECT id, vehicle_no, driver_name FROM vehicles WHERE status='active' ORDER BY vehicle_no");
+$drivers = $conn->query("SELECT id, name FROM drivers WHERE status='active' ORDER BY name");
+$brokers = $conn->query("SELECT id, name FROM brokers WHERE status='active' ORDER BY name");
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-cash-register mr-1"></i> New Sale</h1>
@@ -109,7 +118,7 @@ $products = $conn->query("SELECT p.id, p.name, p.sale_price, p.cost_rate, p.stoc
     <div class="card-body">
         <form method="POST" id="saleForm">
             <div class="row">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="form-group">
                         <label>Customer <span class="text-danger">*</span></label>
                         <select name="customer_id" class="form-control" required>
@@ -120,16 +129,68 @@ $products = $conn->query("SELECT p.id, p.name, p.sale_price, p.cost_rate, p.stoc
                         </select>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="form-group">
                         <label>Date <span class="text-danger">*</span></label>
                         <input type="date" name="date" class="form-control" value="<?= date('Y-m-d') ?>" required>
                     </div>
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <div class="form-group">
                         <label>Invoice No.</label>
                         <input type="text" name="invoice_no" class="form-control" value="<?= generateInvoiceNo() ?>">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Warehouse <span class="text-danger">*</span></label>
+                        <select name="warehouse_id" class="form-control" required>
+                            <option value="">Select Warehouse</option>
+                            <?php while ($w = $warehouses->fetch_assoc()): ?>
+                            <option value="<?= $w['id'] ?>"><?= htmlspecialchars($w['name']) ?></option>
+                            <?php endwhile; ?>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card bg-light mb-3">
+                <div class="card-header"><strong>Transport</strong></div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Vehicle</label>
+                                <select name="vehicle_id" class="form-control">
+                                    <option value="">Select Vehicle</option>
+                                    <?php $vehicles->data_seek(0); while ($v = $vehicles->fetch_assoc()): ?>
+                                    <option value="<?= $v['id'] ?>"><?= htmlspecialchars($v['vehicle_no']) ?></option>
+                                    <?php endwhile; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Driver</label>
+                                <select name="driver_id" class="form-control">
+                                    <option value="">Select Driver</option>
+                                    <?php $drivers->data_seek(0); while ($d = $drivers->fetch_assoc()): ?>
+                                    <option value="<?= $d['id'] ?>"><?= htmlspecialchars($d['name']) ?></option>
+                                    <?php endwhile; ?>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label>Broker</label>
+                                <select name="broker_id" class="form-control">
+                                    <option value="">Select Broker</option>
+                                    <?php $brokers->data_seek(0); while ($br = $brokers->fetch_assoc()): ?>
+                                    <option value="<?= $br['id'] ?>"><?= htmlspecialchars($br['name']) ?></option>
+                                    <?php endwhile; ?>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

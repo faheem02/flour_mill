@@ -49,6 +49,14 @@ function generateProductionNo() {
     return 'PROD-' . $num;
 }
 
+function generateBookingNo() {
+    global $conn;
+    $result = $conn->query("SELECT COUNT(*) as c FROM bookings");
+    $row = $result->fetch_assoc();
+    $num = str_pad($row['c'] + 1, 4, '0', STR_PAD_LEFT);
+    return 'BK-' . $num;
+}
+
 function flashMessage() {
     if (isset($_SESSION['flash'])) {
         $msg = $_SESSION['flash'];

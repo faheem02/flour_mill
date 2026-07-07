@@ -11,7 +11,10 @@ $result = $conn->query("SELECT * FROM suppliers ORDER BY name ASC");
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-truck mr-1"></i> Suppliers</h1>
-    <a href="add.php" class="btn btn-primary btn-sm"><i class="fas fa-plus-circle mr-1"></i> Add Supplier</a>
+    <div>
+        <a href="add.php" class="btn btn-primary btn-sm"><i class="fas fa-plus-circle mr-1"></i> Add Supplier</a>
+        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+    </div>
 </div>
 
 <div class="card shadow mb-4">

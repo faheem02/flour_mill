@@ -13,7 +13,10 @@ $total = $conn->query("SELECT COALESCE(SUM(amount),0) as t FROM expenses")->fetc
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-coins mr-1"></i> Expense List</h1>
-    <a href="add.php" class="btn btn-primary btn-sm"><i class="fas fa-plus-circle mr-1"></i> Add Expense</a>
+    <div>
+        <a href="add.php" class="btn btn-primary btn-sm"><i class="fas fa-plus-circle mr-1"></i> Add Expense</a>
+        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+    </div>
 </div>
 
 <div class="card shadow mb-4">

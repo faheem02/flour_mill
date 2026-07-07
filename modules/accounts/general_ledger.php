@@ -63,7 +63,10 @@ $totals = $conn->query("SELECT COALESCE(SUM(jei.debit),0) as td, COALESCE(SUM(je
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-book mr-1"></i> General Ledger</h1>
-    <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#entryModal"><i class="fas fa-plus mr-1"></i> New Entry</button>
+    <div>
+        <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#entryModal"><i class="fas fa-plus mr-1"></i> New Entry</button>
+        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+    </div>
 </div>
 
 <?php if ($error): ?><div class="alert alert-danger"><?= $error ?></div><?php endif; ?>

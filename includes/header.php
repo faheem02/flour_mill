@@ -7,16 +7,19 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-$purchases_active    = in_array($active_page ?? '', ['purchase_add','purchase_list','purchase_return']);
+$bookings_active     = in_array($active_page ?? '', ['booking_add','booking_list']);
 $suppliers_active    = in_array($active_page ?? '', ['supplier_add','supplier_list','supplier_ledger','supplier_payment']);
 $products_active     = in_array($active_page ?? '', ['product_add','product_list','product_stock']);
 $production_active   = in_array($active_page ?? '', ['production_add','production_list','production_report']);
 $customers_active    = in_array($active_page ?? '', ['customer_add','customer_list','customer_ledger','customer_receipt']);
 $sales_active        = in_array($active_page ?? '', ['sale_add','sale_list','sale_return','sale_return_list']);
-$stock_active        = in_array($active_page ?? '', ['stock_adjustment','stock_ledger','stock_report']);
 $expenses_active     = in_array($active_page ?? '', ['expense_category','expense_add','expense_list']);
 $accounts_active     = in_array($active_page ?? '', ['cash_book','bank_book','general_ledger']);
-$reports_active      = in_array($active_page ?? '', ['daily_summary','stock_report']);
+$masters_active      = in_array($active_page ?? '', ['vehicles','drivers','bags','brokers','warehouses']);
+$arrivals_active     = in_array($active_page ?? '', ['arrival_add','arrival_list','arrival_stock']);
+$farmers_active      = in_array($active_page ?? '', ['farmer_list','farmer_ledger','farmer_payment']);
+$stock_active        = in_array($active_page ?? '', ['stock_adjustment','stock_ledger','stock_report','warehouse_stock']);
+$reports_active      = in_array($active_page ?? '', ['daily_summary']);
 
 ?>
 <!DOCTYPE html>
@@ -387,16 +390,66 @@ $reports_active      = in_array($active_page ?? '', ['daily_summary','stock_repo
             </li>
 
             <hr class="sidebar-divider">
-            <div class="sidebar-heading">Purchases</div>
-            <li class="nav-item <?= $purchases_active ? 'active' : '' ?>">
-                <a class="nav-link <?= $purchases_active ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapsePurchases" aria-expanded="<?= $purchases_active ? 'true' : 'false' ?>">
-                    <i class="fas fa-fw fa-shopping-cart"></i>
-                    <span>Purchases</span>
+            <div class="sidebar-heading">Masters</div>
+            <li class="nav-item <?= $masters_active ? 'active' : '' ?>">
+                <a class="nav-link <?= $masters_active ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseMasters" aria-expanded="<?= $masters_active ? 'true' : 'false' ?>">
+                    <i class="fas fa-fw fa-database"></i>
+                    <span>Masters</span>
                 </a>
-                <div id="collapsePurchases" class="collapse <?= $purchases_active ? 'show' : '' ?>" data-parent="#accordionSidebar">
+                <div id="collapseMasters" class="collapse <?= $masters_active ? 'show' : '' ?>" data-parent="#accordionSidebar">
                     <div class="py-2 collapse-inner rounded">
-                        <a class="collapse-item <?= navActive('purchase_add', $active_page ?? '') ?>" href="<?= $base_url ?>modules/purchases/add.php"><i class="fas fa-plus-circle fa-sm mr-1"></i> New Purchase</a>
-                        <a class="collapse-item <?= navActive('purchase_list', $active_page ?? '') ?>" href="<?= $base_url ?>modules/purchases/list.php"><i class="fas fa-list fa-sm mr-1"></i> Purchase List</a>
+                        <a class="collapse-item <?= navActive('vehicles', $active_page ?? '') ?>" href="<?= $base_url ?>modules/masters/vehicles.php"><i class="fas fa-truck fa-sm mr-1"></i> Vehicles</a>
+                        <a class="collapse-item <?= navActive('drivers', $active_page ?? '') ?>" href="<?= $base_url ?>modules/masters/drivers.php"><i class="fas fa-id-card fa-sm mr-1"></i> Drivers</a>
+                        <a class="collapse-item <?= navActive('bags', $active_page ?? '') ?>" href="<?= $base_url ?>modules/masters/bags.php"><i class="fas fa-shopping-bag fa-sm mr-1"></i> Bag Types</a>
+                        <a class="collapse-item <?= navActive('brokers', $active_page ?? '') ?>" href="<?= $base_url ?>modules/masters/brokers.php"><i class="fas fa-handshake fa-sm mr-1"></i> Brokers</a>
+                        <a class="collapse-item <?= navActive('warehouses', $active_page ?? '') ?>" href="<?= $base_url ?>modules/masters/warehouses.php"><i class="fas fa-warehouse fa-sm mr-1"></i> Warehouses</a>
+                    </div>
+                </div>
+            </li>
+
+            <hr class="sidebar-divider">
+            <div class="sidebar-heading">Wheat Arrival</div>
+            <li class="nav-item <?= $arrivals_active ? 'active' : '' ?>">
+                <a class="nav-link <?= $arrivals_active ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseArrivals" aria-expanded="<?= $arrivals_active ? 'true' : 'false' ?>">
+                    <i class="fas fa-fw fa-truck-loading"></i>
+                    <span>Arrivals</span>
+                </a>
+                <div id="collapseArrivals" class="collapse <?= $arrivals_active ? 'show' : '' ?>" data-parent="#accordionSidebar">
+                    <div class="py-2 collapse-inner rounded">
+                        <a class="collapse-item <?= navActive('arrival_add', $active_page ?? '') ?>" href="<?= $base_url ?>modules/arrivals/add.php"><i class="fas fa-plus-circle fa-sm mr-1"></i> New Arrival</a>
+                        <a class="collapse-item <?= navActive('arrival_list', $active_page ?? '') ?>" href="<?= $base_url ?>modules/arrivals/list.php"><i class="fas fa-list fa-sm mr-1"></i> Arrival Register</a>
+                        <a class="collapse-item <?= navActive('arrival_stock', $active_page ?? '') ?>" href="<?= $base_url ?>modules/arrivals/stock.php"><i class="fas fa-warehouse fa-sm mr-1"></i> Raw Material Stock</a>
+                    </div>
+                </div>
+            </li>
+
+            <hr class="sidebar-divider">
+            <div class="sidebar-heading">Booking</div>
+            <li class="nav-item <?= $bookings_active ? 'active' : '' ?>">
+                <a class="nav-link <?= $bookings_active ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseBookings" aria-expanded="<?= $bookings_active ? 'true' : 'false' ?>">
+                    <i class="fas fa-fw fa-file-signature"></i>
+                    <span>Booking</span>
+                </a>
+                <div id="collapseBookings" class="collapse <?= $bookings_active ? 'show' : '' ?>" data-parent="#accordionSidebar">
+                    <div class="py-2 collapse-inner rounded">
+                        <a class="collapse-item <?= navActive('booking_add', $active_page ?? '') ?>" href="<?= $base_url ?>modules/bookings/add.php"><i class="fas fa-plus-circle fa-sm mr-1"></i> New Booking</a>
+                        <a class="collapse-item <?= navActive('booking_list', $active_page ?? '') ?>" href="<?= $base_url ?>modules/bookings/list.php"><i class="fas fa-list fa-sm mr-1"></i> Booking List</a>
+                    </div>
+                </div>
+            </li>
+
+            <hr class="sidebar-divider">
+            <div class="sidebar-heading">Farmers</div>
+            <li class="nav-item <?= $farmers_active ? 'active' : '' ?>">
+                <a class="nav-link <?= $farmers_active ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseFarmers" aria-expanded="<?= $farmers_active ? 'true' : 'false' ?>">
+                    <i class="fas fa-fw fa-tractor"></i>
+                    <span>Farmers</span>
+                </a>
+                <div id="collapseFarmers" class="collapse <?= $farmers_active ? 'show' : '' ?>" data-parent="#accordionSidebar">
+                    <div class="py-2 collapse-inner rounded">
+                        <a class="collapse-item <?= navActive('farmer_list', $active_page ?? '') ?>" href="<?= $base_url ?>modules/farmers/list.php"><i class="fas fa-list fa-sm mr-1"></i> Farmer List</a>
+                        <a class="collapse-item <?= navActive('farmer_ledger', $active_page ?? '') ?>" href="<?= $base_url ?>modules/farmers/ledger.php"><i class="fas fa-book fa-sm mr-1"></i> Ledger</a>
+                        <a class="collapse-item <?= navActive('farmer_payment', $active_page ?? '') ?>" href="<?= $base_url ?>modules/farmers/payment.php"><i class="fas fa-money-bill-wave fa-sm mr-1"></i> Payment</a>
                     </div>
                 </div>
             </li>
@@ -447,6 +500,7 @@ $reports_active      = in_array($active_page ?? '', ['daily_summary','stock_repo
                         <a class="collapse-item <?= navActive('product_stock', $active_page ?? '') ?>" href="<?= $base_url ?>modules/products/stock.php"><i class="fas fa-warehouse fa-sm mr-1"></i> Current Stock</a>
                         <a class="collapse-item <?= navActive('stock_ledger', $active_page ?? '') ?>" href="<?= $base_url ?>modules/stock/ledger.php"><i class="fas fa-book fa-sm mr-1"></i> Stock Ledger</a>
                         <a class="collapse-item <?= navActive('stock_adjustment', $active_page ?? '') ?>" href="<?= $base_url ?>modules/stock/adjustment.php"><i class="fas fa-sliders-h fa-sm mr-1"></i> Adjustment</a>
+                        <a class="collapse-item <?= navActive('warehouse_stock', $active_page ?? '') ?>" href="<?= $base_url ?>modules/stock/warehouse_stock.php"><i class="fas fa-warehouse fa-sm mr-1"></i> Raw Material Stock</a>
                     </div>
                 </div>
             </li>
@@ -511,6 +565,21 @@ $reports_active      = in_array($active_page ?? '', ['daily_summary','stock_repo
                         <a class="collapse-item <?= navActive('cash_book', $active_page ?? '') ?>" href="<?= $base_url ?>modules/accounts/cash_book.php"><i class="fas fa-money-bill-wave fa-sm mr-1"></i> Cash Book</a>
                         <a class="collapse-item <?= navActive('bank_book', $active_page ?? '') ?>" href="<?= $base_url ?>modules/accounts/bank_book.php"><i class="fas fa-university fa-sm mr-1"></i> Bank Book</a>
                         <a class="collapse-item <?= navActive('general_ledger', $active_page ?? '') ?>" href="<?= $base_url ?>modules/accounts/general_ledger.php"><i class="fas fa-book fa-sm mr-1"></i> General Ledger</a>
+                    </div>
+                </div>
+            </li>
+
+            <hr class="sidebar-divider">
+            <div class="sidebar-heading">Reports</div>
+            <li class="nav-item <?= $reports_active ? 'active' : '' ?>">
+                <a class="nav-link <?= $reports_active ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseReports" aria-expanded="<?= $reports_active ? 'true' : 'false' ?>">
+                    <i class="fas fa-fw fa-chart-bar"></i>
+                    <span>Reports</span>
+                </a>
+                <div id="collapseReports" class="collapse <?= $reports_active ? 'show' : '' ?>" data-parent="#accordionSidebar">
+                    <div class="py-2 collapse-inner rounded">
+                        <a class="collapse-item <?= navActive('daily_summary', $active_page ?? '') ?>" href="<?= $base_url ?>modules/reports/daily_summary.php"><i class="fas fa-calendar-day fa-sm mr-1"></i> Daily Summary</a>
+
                     </div>
                 </div>
             </li>
