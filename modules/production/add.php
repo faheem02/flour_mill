@@ -95,7 +95,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $products = $conn->query("SELECT id, name FROM products WHERE status='active' AND name != 'Wheat (Gandam)' ORDER BY name");
 $purchases = $conn->query("SELECT id, date, total_qty, invoice_no FROM purchases ORDER BY date DESC LIMIT 50");
-$wheat_warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active' AND type='wheat' ORDER BY name");
+$wheat_warehouses = $conn->query("SELECT w.id, w.name, COALESCE(ws.stock_qty,0) as stock_qty
+    FROM warehouses w
+    LEFT JOIN warehouse_stock ws ON ws.warehouse_id = w.id
+    LEFT JOIN products p ON ws.product_id = p.id AND p.name = 'Wheat (Gandam)'
+    WHERE w.status='active' AND w.type='wheat'
+    ORDER BY w.name");
 $fg_warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active' AND type='finished' ORDER BY name");
 $bag_types = $conn->query("SELECT id, name FROM bag_types WHERE status='active' ORDER BY name");
 ?>
@@ -130,7 +135,7 @@ $bag_types = $conn->query("SELECT id, name FROM bag_types WHERE status='active' 
                         <select name="wheat_warehouse_id" class="form-control" required>
                             <option value="">Select Source</option>
                             <?php while ($ww = $wheat_warehouses->fetch_assoc()): ?>
-                            <option value="<?= $ww['id'] ?>"><?= htmlspecialchars($ww['name']) ?></option>
+                            <option value="<?= $ww['id'] ?>" <?= $ww['stock_qty'] <= 0 ? 'disabled' : '' ?>><?= htmlspecialchars($ww['name']) ?> (Stock: <?= qty($ww['stock_qty']) ?> KG)</option>
                             <?php endwhile; ?>
                         </select>
                     </div>

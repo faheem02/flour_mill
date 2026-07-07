@@ -100,7 +100,7 @@ $products = $conn->query("SELECT p.id, p.name, p.sale_price, p.cost_rate, p.stoc
    WHERE pi.product_id = p.id 
    ORDER BY pr.date DESC, pr.id DESC LIMIT 1) as latest_cost_rate
   FROM products p WHERE status='active' AND name != 'Wheat (Gandam)' AND stock_qty > 0 ORDER BY name");
-$warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active' AND type IN ('finished','general') ORDER BY name");
+$warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active' ORDER BY name");
 $vehicles = $conn->query("SELECT id, vehicle_no, driver_name FROM vehicles WHERE status='active' ORDER BY vehicle_no");
 $drivers = $conn->query("SELECT id, name FROM drivers WHERE status='active' ORDER BY name");
 $brokers = $conn->query("SELECT id, name FROM brokers WHERE status='active' ORDER BY name");

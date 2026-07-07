@@ -45,7 +45,7 @@ $customers = $conn->query("SELECT id, name, balance FROM customers ORDER BY name
 $selected = $conn->query("SELECT * FROM customers WHERE id=$cid")->fetch_assoc();
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
-    <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-money-bill-wave mr-1"></i> Record Receipt</h1>
+    <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-money-bill-wave mr-1"></i> Payment Receipt</h1>
     <a href="list.php" class="btn btn-sm btn-secondary"><i class="fas fa-arrow-left mr-1"></i> Back</a>
 </div>
 
