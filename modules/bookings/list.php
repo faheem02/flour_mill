@@ -76,7 +76,10 @@ $bookings = $conn->query("
                         <td class="text-right"><?= money($total_paid) ?></td>
                         <td class="text-right"><?= money($remaining) ?></td>
                         <td><span class="badge badge-<?= $badge ?>"><?= ucfirst($b['status']) ?></span></td>
-                        <td><a href="../farmers/payment.php?booking_id=<?= $b['id'] ?>" class="btn btn-sm btn-primary">Pay</a></td>
+                        <td>
+                            <a href="view.php?id=<?= $b['id'] ?>" class="btn btn-sm btn-info"><i class="fas fa-eye"></i></a>
+                            <a href="../farmers/payment.php?booking_id=<?= $b['id'] ?>" class="btn btn-sm btn-primary"><i class="fas fa-money-bill-wave"></i></a>
+                        </td>
                     </tr>
                     <?php endwhile; ?>
                 </tbody>

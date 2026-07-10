@@ -191,7 +191,7 @@ $total_paid = 0;
                 <thead class="thead-dark">
                     <tr>
                         <th>Farmer</th>
-                        <th>Village</th>
+                        <th>Address</th>
                         <th class="text-right">Balance</th>
                         <th>Action</th>
                     </tr>

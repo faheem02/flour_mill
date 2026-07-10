@@ -42,11 +42,29 @@ CREATE TABLE IF NOT EXISTS bookings (
     received_qty    DECIMAL(12,3) DEFAULT 0,
     rate            DECIMAL(10,2) DEFAULT 0,
     advance_amount  DECIMAL(12,2) DEFAULT 0,
+    moisture_percent DECIMAL(5,2) DEFAULT 0,
+    katt_per_bag    DECIMAL(5,3) DEFAULT 0,
     expected_date   DATE DEFAULT NULL,
     status          ENUM('pending','partial','completed','cancelled') DEFAULT 'pending',
     notes           TEXT,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (farmer_id) REFERENCES farmers(id)
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- 28b. BOOKING BAGS (Bag details per booking)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS booking_bags (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    booking_id      INT NOT NULL,
+    bag_type_id     INT NOT NULL,
+    quantity        INT NOT NULL DEFAULT 0,
+    bag_capacity_kg DECIMAL(10,2) DEFAULT 50.000,
+    ownership       ENUM('company','farmer') NOT NULL DEFAULT 'company',
+    bag_rate        DECIMAL(10,2) DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
+    FOREIGN KEY (bag_type_id) REFERENCES bag_types(id)
 ) ENGINE=InnoDB;
 
 -- ============================================================
@@ -164,6 +182,7 @@ CREATE TABLE IF NOT EXISTS wheat_arrivals (
     id              INT AUTO_INCREMENT PRIMARY KEY,
     booking_id      INT DEFAULT NULL,
     date            DATE NOT NULL,
+    vehicle_no      VARCHAR(50) DEFAULT NULL,
     supplier_id     INT DEFAULT NULL,
     warehouse_id    INT DEFAULT NULL,
     vehicle_id      INT DEFAULT NULL,
@@ -173,7 +192,17 @@ CREATE TABLE IF NOT EXISTS wheat_arrivals (
     gross_weight    DECIMAL(12,3) DEFAULT 0,
     bag_weight      DECIMAL(12,3) DEFAULT 0,
     net_weight      DECIMAL(12,3) DEFAULT 0,
+    actual_weight   DECIMAL(12,3) DEFAULT 0,
+    weight_slip_no  VARCHAR(50) DEFAULT NULL,
+    weight_diff     DECIMAL(12,3) DEFAULT 0,
+    katt_applied    DECIMAL(12,3) DEFAULT 0,
     moisture_pct    DECIMAL(5,2) DEFAULT 0,
+    gross_amount    DECIMAL(12,2) DEFAULT 0,
+    bag_amount      DECIMAL(12,2) DEFAULT 0,
+    labour_charges  DECIMAL(12,2) DEFAULT 0,
+    transport_charges DECIMAL(12,2) DEFAULT 0,
+    other_charges   DECIMAL(12,2) DEFAULT 0,
+    net_amount      DECIMAL(12,2) DEFAULT 0,
     quality_grade   VARCHAR(50),
     broker_id       INT DEFAULT NULL,
     notes           TEXT,

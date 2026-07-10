@@ -70,7 +70,7 @@ include '../../includes/header.php';
                         <th>#</th>
                         <th>Name</th>
                         <th>Phone</th>
-                        <th>Village</th>
+                        <th>Address</th>
                         <th>City</th>
                         <th class="text-right">Balance (Rs)</th>
                         <th>Actions</th>
