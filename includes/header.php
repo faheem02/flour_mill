@@ -15,10 +15,10 @@ $customers_active    = in_array($active_page ?? '', ['customer_add','customer_li
 $sales_active        = in_array($active_page ?? '', ['sale_add','sale_list','sale_return','sale_return_list']);
 $expenses_active     = in_array($active_page ?? '', ['expense_category','expense_add','expense_list']);
 $accounts_active     = in_array($active_page ?? '', ['cash_book','bank_book','general_ledger']);
-$masters_active      = in_array($active_page ?? '', ['vehicles','drivers','bags','brokers','warehouses']);
+$masters_active      = in_array($active_page ?? '', ['warehouses','warehouse_view','warehouse_stock']);
 $arrivals_active     = in_array($active_page ?? '', ['arrival_add','arrival_list','arrival_stock']);
 $farmers_active      = in_array($active_page ?? '', ['farmer_list','farmer_ledger','farmer_payment']);
-$stock_active        = in_array($active_page ?? '', ['stock_adjustment','stock_ledger','stock_report']);
+$stock_active        = in_array($active_page ?? '', ['stock_adjustment','stock_ledger','stock_report','issuance']);
 $reports_active      = in_array($active_page ?? '', ['daily_summary']);
 
 ?>
@@ -390,24 +390,6 @@ $reports_active      = in_array($active_page ?? '', ['daily_summary']);
             </li>
 
             <hr class="sidebar-divider">
-            <div class="sidebar-heading">Masters</div>
-            <li class="nav-item <?= $masters_active ? 'active' : '' ?>">
-                <a class="nav-link <?= $masters_active ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseMasters" aria-expanded="<?= $masters_active ? 'true' : 'false' ?>">
-                    <i class="fas fa-fw fa-database"></i>
-                    <span>Masters</span>
-                </a>
-                <div id="collapseMasters" class="collapse <?= $masters_active ? 'show' : '' ?>" data-parent="#accordionSidebar">
-                    <div class="py-2 collapse-inner rounded">
-                        <a class="collapse-item <?= navActive('vehicles', $active_page ?? '') ?>" href="<?= $base_url ?>modules/masters/vehicles.php"><i class="fas fa-truck fa-sm mr-1"></i> Vehicles</a>
-                        <a class="collapse-item <?= navActive('drivers', $active_page ?? '') ?>" href="<?= $base_url ?>modules/masters/drivers.php"><i class="fas fa-id-card fa-sm mr-1"></i> Drivers</a>
-                        <a class="collapse-item <?= navActive('bags', $active_page ?? '') ?>" href="<?= $base_url ?>modules/masters/bags.php"><i class="fas fa-shopping-bag fa-sm mr-1"></i> Bag Types</a>
-                        <a class="collapse-item <?= navActive('brokers', $active_page ?? '') ?>" href="<?= $base_url ?>modules/masters/brokers.php"><i class="fas fa-handshake fa-sm mr-1"></i> Brokers</a>
-                        <a class="collapse-item <?= navActive('warehouses', $active_page ?? '') ?>" href="<?= $base_url ?>modules/masters/warehouses.php"><i class="fas fa-warehouse fa-sm mr-1"></i> Warehouses</a>
-                    </div>
-                </div>
-            </li>
-
-            <hr class="sidebar-divider">
             <div class="sidebar-heading">Booking</div>
             <li class="nav-item <?= $bookings_active ? 'active' : '' ?>">
                 <a class="nav-link <?= $bookings_active ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseBookings" aria-expanded="<?= $bookings_active ? 'true' : 'false' ?>">
@@ -454,6 +436,21 @@ $reports_active      = in_array($active_page ?? '', ['daily_summary']);
                 </div>
             </li>
 
+            <div class="sidebar-heading">Warehouse</div>
+            <hr class="sidebar-divider">
+            <li class="nav-item <?= $masters_active ? 'active' : '' ?>">
+                <a class="nav-link <?= $masters_active ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseWarehouse" aria-expanded="<?= $masters_active ? 'true' : 'false' ?>">
+                    <i class="fas fa-fw fa-warehouse"></i>
+                    <span>Warehouse</span>
+                </a>
+                <div id="collapseWarehouse" class="collapse <?= $masters_active ? 'show' : '' ?>" data-parent="#accordionSidebar">
+                    <div class="py-2 collapse-inner rounded">
+                        <a class="collapse-item <?= navActive('warehouses', $active_page ?? '') ?>" href="<?= $base_url ?>modules/masters/warehouses.php"><i class="fas fa-list fa-sm mr-1"></i>Warehouse List</a>
+                        <a class="collapse-item <?= navActive('warehouse_stock', $active_page ?? '') ?>" href="<?= $base_url ?>modules/stock/warehouse_stock.php"><i class="fas fa-boxes fa-sm mr-1"></i>Warehouse Stock</a>
+                    </div>
+                </div>
+            </li>
+
             <hr class="sidebar-divider">
             <div class="sidebar-heading">Suppliers</div>
             <li class="nav-item <?= $suppliers_active ? 'active' : '' ?>">
@@ -483,7 +480,6 @@ $reports_active      = in_array($active_page ?? '', ['daily_summary']);
                         <a class="collapse-item <?= navActive('production_add', $active_page ?? '') ?>" href="<?= $base_url ?>modules/production/add.php"><i class="fas fa-plus-circle fa-sm mr-1"></i> New Crush</a>
                         <a class="collapse-item <?= navActive('production_list', $active_page ?? '') ?>" href="<?= $base_url ?>modules/production/list.php"><i class="fas fa-list fa-sm mr-1"></i> Production List</a>
                         <a class="collapse-item <?= navActive('production_report', $active_page ?? '') ?>" href="<?= $base_url ?>modules/production/report.php"><i class="fas fa-chart-bar fa-sm mr-1"></i> Extraction Report</a>
-                        <a class="collapse-item <?= navActive('warehouse_stock', $active_page ?? '') ?>" href="<?= $base_url ?>modules/stock/warehouse_stock.php"><i class="fas fa-warehouse fa-sm mr-1"></i> Warehouse Stock</a>
                     </div>
                 </div>
             </li>
@@ -500,6 +496,7 @@ $reports_active      = in_array($active_page ?? '', ['daily_summary']);
                         <a class="collapse-item <?= navActive('product_list', $active_page ?? '') ?>" href="<?= $base_url ?>modules/products/list.php"><i class="fas fa-list fa-sm mr-1"></i> Products</a>
                         <a class="collapse-item <?= navActive('product_stock', $active_page ?? '') ?>" href="<?= $base_url ?>modules/products/stock.php"><i class="fas fa-warehouse fa-sm mr-1"></i> Current Stock</a>
                         <a class="collapse-item <?= navActive('stock_ledger', $active_page ?? '') ?>" href="<?= $base_url ?>modules/stock/ledger.php"><i class="fas fa-book fa-sm mr-1"></i> Stock Ledger</a>
+                        <a class="collapse-item <?= navActive('issuance', $active_page ?? '') ?>" href="<?= $base_url ?>modules/stock/issuance.php"><i class="fas fa-exchange-alt fa-sm mr-1"></i> Issuance</a>
                         <a class="collapse-item <?= navActive('stock_adjustment', $active_page ?? '') ?>" href="<?= $base_url ?>modules/stock/adjustment.php"><i class="fas fa-sliders-h fa-sm mr-1"></i> Adjustment</a>
                     </div>
                 </div>

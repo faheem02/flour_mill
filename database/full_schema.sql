@@ -176,6 +176,23 @@ CREATE TABLE IF NOT EXISTS warehouse_stock (
 ) ENGINE=InnoDB;
 
 -- ============================================================
+-- 27b. WAREHOUSE TRANSFERS (Stock movement between warehouses)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS warehouse_transfers (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    date            DATE NOT NULL,
+    from_warehouse_id INT NOT NULL,
+    to_warehouse_id INT NOT NULL,
+    product_id      INT NOT NULL,
+    qty             DECIMAL(12,3) NOT NULL,
+    notes           TEXT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (from_warehouse_id) REFERENCES warehouses(id),
+    FOREIGN KEY (to_warehouse_id) REFERENCES warehouses(id),
+    FOREIGN KEY (product_id) REFERENCES products(id)
+) ENGINE=InnoDB;
+
+-- ============================================================
 -- 28. WHEAT ARRIVALS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS wheat_arrivals (
@@ -338,7 +355,7 @@ CREATE TABLE stock_ledger (
     id              INT AUTO_INCREMENT PRIMARY KEY,
     product_id      INT NOT NULL,
     date            DATE NOT NULL,
-    type            ENUM('production','sale','sale_return','adjustment','opening') NOT NULL,
+    type            ENUM('arrival','transfer','production','sale','sale_return','adjustment','opening') NOT NULL,
     reference_id    INT DEFAULT NULL,
     warehouse_id    INT DEFAULT NULL,
     qty_in          DECIMAL(12,3) DEFAULT 0.000,
@@ -569,7 +586,7 @@ CREATE TABLE IF NOT EXISTS warehouses (
     name            VARCHAR(150) NOT NULL,
     location        VARCHAR(200),
     capacity_kg     DECIMAL(12,2) DEFAULT 0,
-    type            ENUM('wheat','finished','packing','general') DEFAULT 'general',
+    type            ENUM('wheat','mill','finished','general') DEFAULT 'general',
     status          ENUM('active','inactive') DEFAULT 'active',
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;

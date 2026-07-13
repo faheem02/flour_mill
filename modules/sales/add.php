@@ -15,9 +15,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $invoice_no = sanitize($_POST['invoice_no']);
     $paid_amount = str_replace(',', '', $_POST['paid_amount']);
     $warehouse_id = (int)$_POST['warehouse_id'];
-    $vehicle_id = (int)$_POST['vehicle_id'];
-    $driver_id = (int)$_POST['driver_id'];
-    $broker_id = (int)$_POST['broker_id'];
+    $vehicle_no = sanitize($_POST['vehicle_no'] ?? '');
+    $driver_name = sanitize($_POST['driver_name'] ?? '');
+    $driver_mobile = sanitize($_POST['driver_mobile'] ?? '');
 
     $product_ids = $_POST['product_id'];
     $qtys = $_POST['qty'];
@@ -36,8 +36,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     else {
         $conn->begin_transaction();
         try {
-            $stmt = $conn->prepare("INSERT INTO sales (customer_id, date, invoice_no, total_qty, total_amount, paid_amount) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("issddd", $customer_id, $date, $invoice_no, $total_qty, $total_amount, $paid_amount);
+            $stmt = $conn->prepare("INSERT INTO sales (customer_id, date, invoice_no, total_qty, total_amount, paid_amount, vehicle_no, driver_name, driver_mobile) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("issdddsss", $customer_id, $date, $invoice_no, $total_qty, $total_amount, $paid_amount, $vehicle_no, $driver_name, $driver_mobile);
             $stmt->execute();
             $sale_id = $conn->insert_id;
 
@@ -100,10 +100,7 @@ $products = $conn->query("SELECT p.id, p.name, p.sale_price, p.cost_rate, p.stoc
    WHERE pi.product_id = p.id 
    ORDER BY pr.date DESC, pr.id DESC LIMIT 1) as latest_cost_rate
   FROM products p WHERE status='active' AND name != 'Wheat (Gandam)' AND stock_qty > 0 ORDER BY name");
-$warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active' ORDER BY name");
-$vehicles = $conn->query("SELECT id, vehicle_no, driver_name FROM vehicles WHERE status='active' ORDER BY vehicle_no");
-$drivers = $conn->query("SELECT id, name FROM drivers WHERE status='active' ORDER BY name");
-$brokers = $conn->query("SELECT id, name FROM brokers WHERE status='active' ORDER BY name");
+$warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active' AND type IN ('mill','finished') ORDER BY type, name");
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-cash-register mr-1"></i> New Sale</h1>
@@ -160,35 +157,20 @@ $brokers = $conn->query("SELECT id, name FROM brokers WHERE status='active' ORDE
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label>Vehicle</label>
-                                <select name="vehicle_id" class="form-control">
-                                    <option value="">Select Vehicle</option>
-                                    <?php $vehicles->data_seek(0); while ($v = $vehicles->fetch_assoc()): ?>
-                                    <option value="<?= $v['id'] ?>"><?= htmlspecialchars($v['vehicle_no']) ?></option>
-                                    <?php endwhile; ?>
-                                </select>
+                                <label>Vehicle No.</label>
+                                <input type="text" name="vehicle_no" class="form-control" placeholder="e.g. LEH-1234">
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label>Driver</label>
-                                <select name="driver_id" class="form-control">
-                                    <option value="">Select Driver</option>
-                                    <?php $drivers->data_seek(0); while ($d = $drivers->fetch_assoc()): ?>
-                                    <option value="<?= $d['id'] ?>"><?= htmlspecialchars($d['name']) ?></option>
-                                    <?php endwhile; ?>
-                                </select>
+                                <label>Driver Name</label>
+                                <input type="text" name="driver_name" class="form-control" placeholder="Driver name">
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label>Broker</label>
-                                <select name="broker_id" class="form-control">
-                                    <option value="">Select Broker</option>
-                                    <?php $brokers->data_seek(0); while ($br = $brokers->fetch_assoc()): ?>
-                                    <option value="<?= $br['id'] ?>"><?= htmlspecialchars($br['name']) ?></option>
-                                    <?php endwhile; ?>
-                                </select>
+                                <label>Driver Mobile</label>
+                                <input type="text" name="driver_mobile" class="form-control" placeholder="03XX-XXXXXXX" oninput="this.value = this.value.replace(/[^0-9\-]/g,'')">
                             </div>
                         </div>
                     </div>
@@ -198,29 +180,47 @@ $brokers = $conn->query("SELECT id, name FROM brokers WHERE status='active' ORDE
             <div class="card bg-light mb-3">
                 <div class="card-header"><strong>Products</strong> <button type="button" class="btn btn-sm btn-success ml-2" onclick="addRow()"><i class="fas fa-plus"></i> Add Product</button></div>
                 <div class="card-body">
+                    <style>
+                        #saleTable { table-layout: fixed; }
+                        #saleTable th, #saleTable td { vertical-align: middle; }
+                        #saleTable select, #saleTable input.form-control {
+                            height: 38px !important;
+                            padding: 6px 10px !important;
+                            font-size: 14px !important;
+                            width: 100% !important;
+                            box-sizing: border-box !important;
+                        }
+                    </style>
                     <table class="table table-bordered" id="saleTable">
+                        <colgroup>
+                            <col style="width:30%">
+                            <col style="width:18%">
+                            <col style="width:18%">
+                            <col style="width:22%">
+                            <col style="width:12%">
+                        </colgroup>
                         <thead>
                             <tr>
                                 <th>Product</th>
                                 <th class="text-right">Qty (KG)</th>
                                 <th class="text-right">Rate/KG</th>
                                 <th class="text-right">Amount</th>
-                                <th width="50">Action</th>
+                                <th class="text-center">Action</th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr>
                                 <td>
-                                    <select name="product_id[]" class="form-control form-control-sm" required onchange="setRate(this)">
+                                    <select name="product_id[]" class="form-control" required onchange="setRate(this)">
                                         <option value="">Select</option>
                                         <?php $products->data_seek(0); while ($pr = $products->fetch_assoc()): ?>
                                         <option value="<?= $pr['id'] ?>" data-price="<?= ($pr['latest_cost_rate'] ?: $pr['cost_rate']) ?: $pr['sale_price'] ?>" data-stock="<?= $pr['stock_qty'] ?>"><?= htmlspecialchars($pr['name']) ?> (Stock: <?= qty($pr['stock_qty']) ?>)</option>
                                         <?php endwhile; ?>
                                     </select>
                                 </td>
-                                <td><input type="text" name="qty[]" class="form-control form-control-sm text-right" placeholder="0" oninput="calcRow(this);calcTotal()"></td>
-                                <td><input type="text" name="rate[]" class="form-control form-control-sm text-right" placeholder="0.00" oninput="calcRow(this);calcTotal()"></td>
-                                <td><input type="text" name="amount[]" class="form-control form-control-sm text-right" placeholder="0.00" readonly style="background:#f5f5f5;font-weight:bold"></td>
+                                <td><input type="text" name="qty[]" class="form-control text-right" placeholder="0" oninput="calcRow(this);calcTotal()"></td>
+                                <td><input type="text" name="rate[]" class="form-control text-right" placeholder="0.00" oninput="calcRow(this);calcTotal()"></td>
+                                <td><input type="text" name="amount[]" class="form-control text-right" placeholder="0.00" readonly style="background:#f5f5f5;font-weight:bold"></td>
                                 <td class="text-center"><button type="button" class="btn btn-danger btn-sm" onclick="this.closest('tr').remove();calcTotal()"><i class="fas fa-times"></i></button></td>
                             </tr>
                         </tbody>
@@ -279,10 +279,10 @@ function calcTotal() {
 function addRow() {
     var options = '<?php $products->data_seek(0); while ($pr = $products->fetch_assoc()): $pr_rate = ($pr["latest_cost_rate"] ?: $pr["cost_rate"]) ?: $pr["sale_price"]; ?><option value="<?= $pr["id"] ?>" data-price="<?= $pr_rate ?>" data-stock="<?= $pr["stock_qty"] ?>"><?= htmlspecialchars($pr["name"]) ?> (Stock: <?= qty($pr["stock_qty"]) ?>)</option><?php endwhile; ?>';
     var html = '<tr>' +
-        '<td><select name="product_id[]" class="form-control form-control-sm" required onchange="setRate(this)"><option value="">Select</option>' + options + '</select></td>' +
-        '<td><input type="text" name="qty[]" class="form-control form-control-sm text-right" placeholder="0" oninput="calcRow(this);calcTotal()"></td>' +
-        '<td><input type="text" name="rate[]" class="form-control form-control-sm text-right" placeholder="0.00" oninput="calcRow(this);calcTotal()"></td>' +
-        '<td><input type="text" name="amount[]" class="form-control form-control-sm text-right" placeholder="0.00" readonly style="background:#f5f5f5;font-weight:bold"></td>' +
+        '<td><select name="product_id[]" class="form-control" required onchange="setRate(this)"><option value="">Select</option>' + options + '</select></td>' +
+        '<td><input type="text" name="qty[]" class="form-control text-right" placeholder="0" oninput="calcRow(this);calcTotal()"></td>' +
+        '<td><input type="text" name="rate[]" class="form-control text-right" placeholder="0.00" oninput="calcRow(this);calcTotal()"></td>' +
+        '<td><input type="text" name="amount[]" class="form-control text-right" placeholder="0.00" readonly style="background:#f5f5f5;font-weight:bold"></td>' +
         '<td class="text-center"><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove();calcTotal()"><i class="fas fa-times"></i></button></td>' +
         '</tr>';
     $('#saleTable tbody').append(html);

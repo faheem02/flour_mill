@@ -13,9 +13,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $date           = $_POST['date'];
     $booking_id     = (int)$_POST['booking_id'];
     $vehicle_no     = sanitize($_POST['vehicle_no']);
-    $driver_id      = (int)$_POST['driver_id'];
+    $driver_id      = !empty($_POST['driver_id']) ? (int)$_POST['driver_id'] : null;
     $warehouse_id   = (int)$_POST['warehouse_id'];
-    $bag_type_id    = (int)$_POST['bag_type_id'];
+    $bag_type_id    = !empty($_POST['bag_type_id']) ? (int)$_POST['bag_type_id'] : null;
     $num_bags       = (int)str_replace(',', '', $_POST['num_bags']);
     $wheat_kg       = str_replace(',', '', $_POST['wheat_kg']);
     $katt_applied   = str_replace(',', '', $_POST['katt_applied']);
@@ -30,7 +30,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $transport_charges = str_replace(',', '', $_POST['transport_charges']);
     $other_charges  = str_replace(',', '', $_POST['other_charges']);
     $net_amount     = str_replace(',', '', $_POST['net_amount']);
-    $broker_id      = (int)$_POST['broker_id'];
     $notes          = sanitize($_POST['notes']);
 
     $bag_weight     = 0;
@@ -41,9 +40,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $conn->begin_transaction();
     try {
-        $stmt = $conn->prepare("INSERT INTO wheat_arrivals (booking_id, date, vehicle_no, warehouse_id, bag_type_id, num_bags, gross_weight, bag_weight, net_weight, actual_weight, weight_slip_no, weight_diff, katt_applied, moisture_pct, gross_amount, bag_amount, labour_charges, transport_charges, other_charges, net_amount, driver_id, broker_id, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("issiiiddddsdddddddddiis", $booking_id, $date, $vehicle_no, $warehouse_id, $bag_type_id, $num_bags, $wheat_kg, $bag_weight, $net_weight, $actual_weight, $weight_slip_no, $weight_diff, $katt_applied, $moisture_pct, $gross_amount, $bag_amount, $labour_charges, $transport_charges, $other_charges, $net_amount, $driver_id, $broker_id, $notes);
+        $stmt = $conn->prepare("INSERT INTO wheat_arrivals (booking_id, date, vehicle_no, warehouse_id, bag_type_id, num_bags, gross_weight, bag_weight, net_weight, actual_weight, weight_slip_no, weight_diff, katt_applied, moisture_pct, gross_amount, bag_amount, labour_charges, transport_charges, other_charges, net_amount, driver_id, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("issiiiddddsdddddddddiis", $booking_id, $date, $vehicle_no, $warehouse_id, $bag_type_id, $num_bags, $wheat_kg, $bag_weight, $net_weight, $actual_weight, $weight_slip_no, $weight_diff, $katt_applied, $moisture_pct, $gross_amount, $bag_amount, $labour_charges, $transport_charges, $other_charges, $net_amount, $driver_id, $notes);
         $stmt->execute();
         $arrival_id = $conn->insert_id;
 
@@ -55,7 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $conn->query("INSERT INTO warehouse_stock (warehouse_id, product_id, stock_qty)
                     VALUES ($warehouse_id, $product_id, $net_weight)
                     ON DUPLICATE KEY UPDATE stock_qty = stock_qty + $net_weight");
-                $conn->query("INSERT INTO stock_ledger (product_id, warehouse_id, type, ref_id, date, qty_in, qty_out, balance, description)
+                $conn->query("INSERT INTO stock_ledger (product_id, warehouse_id, type, reference_id, date, qty_in, qty_out, balance_qty, notes)
                     VALUES ($product_id, $warehouse_id, 'arrival', $arrival_id, '$date', $net_weight, 0, 0, 'Wheat arrival - $vehicle_no')");
             }
         }
@@ -94,7 +93,6 @@ include '../../includes/header.php';
 $bookings = $conn->query("SELECT b.id, b.booking_no, b.moisture_percent, b.katt_per_bag, b.rate, f.name AS sname FROM bookings b JOIN farmers f ON b.farmer_id = f.id WHERE b.status IN ('pending','partial') ORDER BY b.booking_no DESC");
 $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active' AND type='wheat' ORDER BY name");
 $bag_types = $conn->query("SELECT id, name, bag_weight_kg FROM bag_types WHERE status='active' ORDER BY name");
-$brokers = $conn->query("SELECT id, name FROM brokers WHERE status='active' ORDER BY name");
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-truck-loading mr-1"></i> New Wheat Arrival</h1>
@@ -269,17 +267,6 @@ if ($wh_stock && $wh_stock->num_rows > 0):
                         <input type="hidden" name="weight_diff" id="weightDiffHidden">
                     </div>
                 </div>
-                <div class="col-md-3">
-                    <div class="form-group">
-                        <label>Broker</label>
-                        <select name="broker_id" class="form-control">
-                            <option value="">Select Broker</option>
-                            <?php $brokers->data_seek(0); while ($br = $brokers->fetch_assoc()): ?>
-                            <option value="<?= $br['id'] ?>"><?= htmlspecialchars($br['name']) ?></option>
-                            <?php endwhile; ?>
-                        </select>
-                    </div>
-                </div>
             </div>
 
             <hr>
@@ -445,14 +432,14 @@ function calcGrossAmount(weight) {
     calcNetAmount();
 }
 
-// === Net Amount = Gross - Bag - Labour - Transport - Other ===
+// === Net Amount = Gross + Bag + Labour + Transport + Other ===
 function calcNetAmount() {
     var gross = parseFloat($('#grossAmount').val()) || 0;
     var bag = parseFloat($('#bagAmount').val()) || 0;
     var labour = parseFloat($('#labourCharges').val()) || 0;
     var transport = parseFloat($('#transportCharges').val()) || 0;
     var other = parseFloat($('#otherCharges').val()) || 0;
-    var net = gross - bag - labour - transport - other;
+    var net = gross + bag + labour + transport + other;
     $('#netAmount').val(net.toFixed(2));
     $('#netAmountHidden').val(net.toFixed(2));
 }

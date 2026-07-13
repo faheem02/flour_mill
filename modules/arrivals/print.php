@@ -7,13 +7,12 @@ require_once '../../includes/db.php';
 
 $id = (int)$_GET['id'];
 $row = $conn->query("SELECT a.*, w.name as warehouse_name, 
-    b.name as bag_type_name, br.name as broker_name,
+    b.name as bag_type_name,
     bk.booking_no, f.name as farmer_name,
     d.name as driver_name
     FROM wheat_arrivals a
     LEFT JOIN warehouses w ON a.warehouse_id = w.id
     LEFT JOIN bag_types b ON a.bag_type_id = b.id
-    LEFT JOIN brokers br ON a.broker_id = br.id
     LEFT JOIN bookings bk ON a.booking_id = bk.id
     LEFT JOIN farmers f ON bk.farmer_id = f.id
     LEFT JOIN drivers d ON a.driver_id = d.id
@@ -53,11 +52,10 @@ $charges = ($row['bag_amount']??0) + ($row['labour_charges']??0) + ($row['transp
         <tr><td class="label">Booking No:</td><td><?= htmlspecialchars($row['booking_no'] ?? '-') ?></td>
             <td class="label">Weight Slip No:</td><td><?= htmlspecialchars($row['weight_slip_no'] ?? '-') ?></td></tr>
         <tr><td class="label">Farmer:</td><td><?= htmlspecialchars($row['farmer_name'] ?? '-') ?></td>
-            <td class="label">Broker:</td><td><?= htmlspecialchars($row['broker_name'] ?? '-') ?></td></tr>
-        <tr><td class="label">Vehicle No:</td><td><?= htmlspecialchars($row['vehicle_no'] ?? '-') ?></td>
-            <td class="label">Driver:</td><td><?= htmlspecialchars($row['driver_name'] ?? '-') ?></td></tr>
-        <tr><td class="label">Warehouse:</td><td><?= htmlspecialchars($row['warehouse_name']) ?></td>
-            <td class="label">Bag Type:</td><td><?= htmlspecialchars($row['bag_type_name'] ?? '-') ?></td></tr>
+            <td class="label">Vehicle No:</td><td><?= htmlspecialchars($row['vehicle_no'] ?? '-') ?></td></tr>
+        <tr><td class="label">Driver:</td><td><?= htmlspecialchars($row['driver_name'] ?? '-') ?></td>
+            <td class="label">Warehouse:</td><td><?= htmlspecialchars($row['warehouse_name']) ?></td></tr>
+        <tr><td class="label">Bag Type:</td><td><?= htmlspecialchars($row['bag_type_name'] ?? '-') ?></td></tr>
     </table>
 
     <div class="section-title">Weight Details</div>

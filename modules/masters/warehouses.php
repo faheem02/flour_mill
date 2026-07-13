@@ -70,6 +70,7 @@ include '../../includes/header.php';
                         <td class="text-right"><?= qty($row['capacity_kg']) ?></td>
                         <td><span class="badge badge-info"><?= ucfirst($row['type']) ?></span></td>
                         <td>
+                            <a href="warehouse_view.php?id=<?= $row['id'] ?>" class="btn btn-sm btn-info" title="View Stock & Arrivals"><i class="fas fa-eye"></i></a>
                             <a href="#" class="btn btn-sm btn-warning" title="Edit" onclick="editWarehouse(<?= $row['id'] ?>, '<?= htmlspecialchars(addslashes($row['code'])) ?>', '<?= htmlspecialchars(addslashes($row['name'])) ?>', '<?= htmlspecialchars(addslashes($row['location'])) ?>', '<?= $row['capacity_kg'] ?>', '<?= $row['type'] ?>')"><i class="fas fa-edit"></i></a>
                             <a href="warehouse_delete.php?id=<?= $row['id'] ?>" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete this warehouse?')"><i class="fas fa-trash"></i></a>
                         </td>
@@ -112,8 +113,8 @@ include '../../includes/header.php';
                         <label>Type</label>
                         <select name="type" id="whType" class="form-control">
                             <option value="wheat">Wheat Storage</option>
+                            <option value="mill">Mill</option>
                             <option value="finished">Finished Goods</option>
-                            <option value="packing">Packing Material</option>
                             <option value="general">General</option>
                         </select>
                     </div>

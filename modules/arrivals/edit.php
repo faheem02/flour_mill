@@ -31,7 +31,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $other_charges  = str_replace(',', '', $_POST['other_charges']);
     $net_amount     = str_replace(',', '', $_POST['net_amount']);
     $driver_id      = (int)$_POST['driver_id'];
-    $broker_id      = (int)$_POST['broker_id'];
     $notes          = sanitize($_POST['notes']);
 
     $bag_weight = 0;
@@ -45,8 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $conn->begin_transaction();
     try {
-        $stmt = $conn->prepare("UPDATE wheat_arrivals SET date=?, vehicle_no=?, warehouse_id=?, bag_type_id=?, num_bags=?, gross_weight=?, bag_weight=?, net_weight=?, actual_weight=?, weight_slip_no=?, weight_diff=?, katt_applied=?, moisture_pct=?, gross_amount=?, bag_amount=?, labour_charges=?, transport_charges=?, other_charges=?, net_amount=?, driver_id=?, broker_id=?, notes=? WHERE id=?");
-        $stmt->bind_param("ssiiidddsdddddddddiisi", $date, $vehicle_no, $warehouse_id, $bag_type_id, $num_bags, $actual_weight, $bag_weight, $net_weight, $actual_weight, $weight_slip_no, $weight_diff, $katt_applied, $moisture_pct, $gross_amount, $bag_amount, $labour_charges, $transport_charges, $other_charges, $net_amount, $driver_id, $broker_id, $notes, $id);
+        $stmt = $conn->prepare("UPDATE wheat_arrivals SET date=?, vehicle_no=?, warehouse_id=?, bag_type_id=?, num_bags=?, gross_weight=?, bag_weight=?, net_weight=?, actual_weight=?, weight_slip_no=?, weight_diff=?, katt_applied=?, moisture_pct=?, gross_amount=?, bag_amount=?, labour_charges=?, transport_charges=?, other_charges=?, net_amount=?, driver_id=?, notes=? WHERE id=?");
+        $stmt->bind_param("ssiiidddsdddddddddisi", $date, $vehicle_no, $warehouse_id, $bag_type_id, $num_bags, $actual_weight, $bag_weight, $net_weight, $actual_weight, $weight_slip_no, $weight_diff, $katt_applied, $moisture_pct, $gross_amount, $bag_amount, $labour_charges, $transport_charges, $other_charges, $net_amount, $driver_id, $notes, $id);
         $stmt->execute();
 
         // Adjust warehouse stock
@@ -60,8 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $conn->query("INSERT INTO warehouse_stock (warehouse_id, product_id, stock_qty) VALUES ($warehouse_id, $pid, $net_weight)
                     ON DUPLICATE KEY UPDATE stock_qty = stock_qty + $net_weight");
             }
-            $conn->query("INSERT INTO stock_ledger (product_id, warehouse_id, type, ref_id, date, qty_in, qty_out, balance, description)
-                VALUES ($pid, $warehouse_id, 'arrival_edit', $id, '$date', $net_weight, 0, 0, 'Arrival #$id edited')");
+            $conn->query("INSERT INTO stock_ledger (product_id, warehouse_id, type, reference_id, date, qty_in, qty_out, balance_qty, notes)
+                VALUES ($pid, $warehouse_id, 'arrival', $id, '$date', $net_weight, 0, 0, 'Arrival #$id edited')");
         }
 
         $conn->commit();
@@ -84,7 +83,6 @@ if ($driver_id_val > 0) {
 
 $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active' AND type='wheat' ORDER BY name");
 $bag_types = $conn->query("SELECT id, name, bag_weight_kg FROM bag_types WHERE status='active' ORDER BY name");
-$brokers = $conn->query("SELECT id, name FROM brokers WHERE status='active' ORDER BY name");
 
 include '../../includes/header.php';
 ?>
@@ -120,17 +118,6 @@ include '../../includes/header.php';
                             <option value="">Select</option>
                             <?php while ($w = $warehouses->fetch_assoc()): ?>
                             <option value="<?= $w['id'] ?>" <?= $w['id'] == $arrival['warehouse_id'] ? 'selected' : '' ?>><?= htmlspecialchars($w['name']) ?></option>
-                            <?php endwhile; ?>
-                        </select>
-                    </div>
-                </div>
-                <div class="col-md-3">
-                    <div class="form-group">
-                        <label>Broker</label>
-                        <select name="broker_id" class="form-control">
-                            <option value="">Select</option>
-                            <?php $brokers->data_seek(0); while ($br = $brokers->fetch_assoc()): ?>
-                            <option value="<?= $br['id'] ?>" <?= $br['id'] == $arrival['broker_id'] ? 'selected' : '' ?>><?= htmlspecialchars($br['name']) ?></option>
                             <?php endwhile; ?>
                         </select>
                     </div>

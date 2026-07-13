@@ -44,6 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_stock'])) {
 
 $warehouses = $conn->query("SELECT id, name, type, location FROM warehouses WHERE status='active' ORDER BY name");
 $products = $conn->query("SELECT id, name, stock_qty FROM products WHERE status='active' ORDER BY name");
+
+include '../../includes/header.php';
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-warehouse mr-1"></i> Warehouse Stock</h1>

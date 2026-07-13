@@ -7,13 +7,12 @@ $page_title = 'Arrival Register';
 require_once '../../includes/db.php';
 include '../../includes/header.php';
 
-$result = $conn->query("SELECT a.*, w.name as warehouse_name, b.booking_no, f.name as farmer_name, d.name as driver_name, br.name as broker_name, bt.name as bag_type_name
+$result = $conn->query("SELECT a.*, w.name as warehouse_name, b.booking_no, f.name as farmer_name, d.name as driver_name, bt.name as bag_type_name
     FROM wheat_arrivals a
     LEFT JOIN warehouses w ON a.warehouse_id = w.id
     LEFT JOIN bookings b ON a.booking_id = b.id
     LEFT JOIN farmers f ON b.farmer_id = f.id
     LEFT JOIN drivers d ON a.driver_id = d.id
-    LEFT JOIN brokers br ON a.broker_id = br.id
     LEFT JOIN bag_types bt ON a.bag_type_id = bt.id
     ORDER BY a.date DESC, a.id DESC");
 ?>
@@ -43,7 +42,7 @@ $result = $conn->query("SELECT a.*, w.name as warehouse_name, b.booking_no, f.na
                         <th>Vehicle / Driver</th>
                         <th>Bags</th>
                         <th class="text-right">Net KG</th>
-                        <th class="text-right">Actual</th>
+                        <th class="text-right">Actual KG</th>
                         <th class="text-right">Diff</th>
                         <th class="text-right">Gross</th>
                         <th class="text-right">Charges</th>
@@ -75,9 +74,6 @@ $result = $conn->query("SELECT a.*, w.name as warehouse_name, b.booking_no, f.na
                             <?= htmlspecialchars($row['vehicle_no'] ?? '-') ?>
                             <?php if ($row['driver_name']): ?>
                                 <br><small class="text-muted"><?= htmlspecialchars($row['driver_name']) ?></small>
-                            <?php endif; ?>
-                            <?php if ($row['broker_name']): ?>
-                                <br><small class="text-muted">Brkr: <?= htmlspecialchars($row['broker_name']) ?></small>
                             <?php endif; ?>
                         </td>
                         <td>
@@ -181,7 +177,6 @@ function viewArrival(id) {
         h += '<h6><i class="fas fa-file-invoice mr-1"></i> Booking Info</h6>';
         h += '<div class="row"><div class="col-5 detail-label">Booking No</div><div class="col-7 detail-value">' + (d.booking_no || '-') + '</div></div>';
         h += '<div class="row"><div class="col-5 detail-label">Farmer</div><div class="col-7 detail-value">' + (d.farmer_name || '-') + '</div></div>';
-        h += '<div class="row"><div class="col-5 detail-label">Broker</div><div class="col-7 detail-value">' + (d.broker_name || '-') + '</div></div>';
         h += '<div class="row"><div class="col-5 detail-label">Slip No</div><div class="col-7 detail-value">' + (d.weight_slip_no || '-') + '</div></div>';
         h += '</div></div>';
 
