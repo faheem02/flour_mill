@@ -42,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         $stmt = $conn->prepare("INSERT INTO wheat_arrivals (booking_id, date, vehicle_no, warehouse_id, bag_type_id, num_bags, gross_weight, bag_weight, net_weight, actual_weight, weight_slip_no, weight_diff, katt_applied, moisture_pct, gross_amount, bag_amount, labour_charges, transport_charges, other_charges, net_amount, driver_id, notes)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("issiiiddddsdddddddddiis", $booking_id, $date, $vehicle_no, $warehouse_id, $bag_type_id, $num_bags, $wheat_kg, $bag_weight, $net_weight, $actual_weight, $weight_slip_no, $weight_diff, $katt_applied, $moisture_pct, $gross_amount, $bag_amount, $labour_charges, $transport_charges, $other_charges, $net_amount, $driver_id, $notes);
+        $stmt->bind_param("issiiiddddsddddddddiis", $booking_id, $date, $vehicle_no, $warehouse_id, $bag_type_id, $num_bags, $wheat_kg, $bag_weight, $net_weight, $actual_weight, $weight_slip_no, $weight_diff, $katt_applied, $moisture_pct, $gross_amount, $bag_amount, $labour_charges, $transport_charges, $other_charges, $net_amount, $driver_id, $notes);
         $stmt->execute();
         $arrival_id = $conn->insert_id;
 
@@ -78,6 +78,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
+        // Bag stock: add bags when company bags returned or farmer bags purchased
+        if ($num_bags > 0 && $warehouse_id > 0 && $booking_id > 0) {
+            $bb = $conn->query("SELECT ownership FROM booking_bags WHERE booking_id=$booking_id LIMIT 1")->fetch_assoc();
+            $add_bags = false;
+            if ($bb && $bb['ownership'] === 'company') {
+                $add_bags = true;
+            } elseif ($bb && $bb['ownership'] === 'farmer' && $bag_amount > 0) {
+                $add_bags = true;
+            }
+            if ($add_bags) {
+                $conn->query("INSERT INTO bag_stock (warehouse_id, qty)
+                    VALUES ($warehouse_id, $num_bags)
+                    ON DUPLICATE KEY UPDATE qty = qty + $num_bags");
+                $bal = $conn->query("SELECT qty FROM bag_stock WHERE warehouse_id=$warehouse_id")->fetch_assoc()['qty'];
+                $conn->query("INSERT INTO bag_stock_ledger (date, warehouse_id, qty_in, qty_out, balance_qty, type, reference_id, notes)
+                    VALUES ('$date', $warehouse_id, $num_bags, 0, $bal, 'arrival_in', $arrival_id, 'Bags returned/purchased with arrival - $vehicle_no')");
+            }
+        }
+
         $conn->commit();
         $_SESSION['flash'] = "Arrival recorded. Net Weight: " . qty($net_weight) . " KG";
         header("Location: list.php");
@@ -107,22 +126,35 @@ $wh_stock = $conn->query("SELECT w.name, COALESCE(ws.stock_qty,0) as qty
     LEFT JOIN warehouse_stock ws ON w.id=ws.warehouse_id AND ws.product_id=(SELECT id FROM products WHERE name='Wheat (Gandam)' LIMIT 1)
     WHERE w.status='active' AND w.type='wheat'
     ORDER BY w.name");
-if ($wh_stock && $wh_stock->num_rows > 0):
+$total_wheat = 0;
+$warehouses_stock = [];
+if ($wh_stock && $wh_stock->num_rows > 0) {
+    while ($s = $wh_stock->fetch_assoc()) {
+        $total_wheat += $s['qty'];
+        $warehouses_stock[] = $s;
+    }
+}
 ?>
-<div class="card bg-light mb-3">
-    <div class="card-header py-2"><small class="font-weight-bold text-muted"><i class="fas fa-boxes mr-1"></i> Current Raw Material Stock</small></div>
-    <div class="card-body py-2">
+<?php if (!empty($warehouses_stock)): ?>
+<div class="card shadow-sm mb-4" style="border-left: 4px solid #d4a017;">
+    <div class="card-body py-3">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h6 class="font-weight-bold text-dark mb-0" style="font-size:14px;"><i class="fas fa-wheat-awn text-warning mr-1"></i> Current Raw Material Stock</h6>
+            <span class="badge badge-primary px-3 py-2" style="font-size:13px; background: linear-gradient(135deg, #1a3a5c, #2d5f8a); border-radius:20px;">
+                <i class="fas fa-weight-hanging mr-1"></i> Total: <?= qty($total_wheat) ?> KG
+            </span>
+        </div>
         <div class="row">
-            <?php $total_wheat = 0; while ($s = $wh_stock->fetch_assoc()): $total_wheat += $s['qty']; ?>
-            <div class="col-md-3 col-6 text-center">
-                <small class="text-muted d-block"><?= htmlspecialchars($s['name']) ?></small>
-                <strong class="h5 text-success"><?= qty($s['qty']) ?> KG</strong>
+            <?php foreach ($warehouses_stock as $s): ?>
+            <div class="col-md-3 col-6 mb-2">
+                <div class="text-center p-2 rounded" style="background: #f8f9fc;">
+                    <div class="mb-1"><i class="fas fa-warehouse text-primary" style="font-size:18px;"></i></div>
+                    <small class="text-muted d-block" style="font-size:11px;"><?= htmlspecialchars($s['name']) ?></small>
+                    <strong style="font-size:16px; color: <?= $s['qty'] > 0 ? '#28a745' : '#dc3545' ?>;"><?= qty($s['qty']) ?></strong>
+                    <small class="text-muted d-block" style="font-size:10px;">KG</small>
+                </div>
             </div>
-            <?php endwhile; ?>
-            <div class="col-md-3 col-6 text-center border-left">
-                <small class="text-muted d-block">Total Wheat</small>
-                <strong class="h5 text-primary"><?= qty($total_wheat) ?> KG</strong>
-            </div>
+            <?php endforeach; ?>
         </div>
     </div>
 </div>
@@ -153,15 +185,15 @@ if ($wh_stock && $wh_stock->num_rows > 0):
                 </div>
                 <div class="col-md-5">
                     <div id="bookingInfo" class="p-2 border rounded bg-light" style="display:none;font-size:13px;">
-                        <div class="row">
-                            <div class="col-4"><span class="text-muted">Rate/Man:</span> <strong id="biRate"></strong></div>
-                            <div class="col-4"><span class="text-muted">Moisture:</span> <strong id="biMoisture"></strong></div>
-                            <div class="col-4"><span class="text-muted">Katt/Bag:</span> <strong id="biKatt"></strong></div>
-                            <div class="col-4"><span class="text-muted">Bags:</span> <strong id="biBags"></strong></div>
-                            <div class="col-4"><span class="text-muted">Booked Qty:</span> <strong id="biBookedQty"></strong></div>
-                            <div class="col-4"><span class="text-muted">Bags Own:</span> <strong id="biBagOwn"></strong></div>
-                            <div class="col-4"><span class="text-muted">Bag Rate:</span> <strong id="biBagRate"></strong></div>
-                            <div class="col-4"><span class="text-muted">Farmer:</span> <strong id="biFarmer"></strong></div>
+                        <div class="d-flex flex-wrap" style="gap: 4px 16px;">
+                            <div><span class="text-muted">Rate/Man:</span> <strong id="biRate"></strong></div>
+                            <div><span class="text-muted">Moisture:</span> <strong id="biMoisture"></strong></div>
+                            <div><span class="text-muted">Katt/Bag:</span> <strong id="biKatt"></strong></div>
+                            <div><span class="text-muted">Booked Bags:</span> <strong id="biBags"></strong></div>
+                            <div><span class="text-muted">Booked QTY:</span> <strong id="biBookedQty"></strong></div>
+                            <div><span class="text-muted">Bag Own:</span> <strong id="biBagOwn"></strong></div>
+                            <div><span class="text-muted">Bag Rate:</span> <strong id="biBagRate"></strong></div>
+                            <div><span class="text-muted">Farmer:</span> <strong id="biFarmer"></strong></div>
                         </div>
                     </div>
                 </div>
@@ -356,7 +388,7 @@ $('#bookingId').on('change', function() {
     $.get('get_booking_json.php?id=' + id, function(data) {
         var bookedQty = parseFloat(data.booked_qty) || 0;
         var bagQty = data.bag ? parseInt(data.bag.quantity) || 0 : 0;
-        $('#biBags').text(bagQty);
+        $('#biBags').text(bagQty + ' bags');
         $('#biBookedQty').text(bookedQty.toLocaleString() + ' KG');
         $('#biFarmer').text(data.farmer_name || '-');
 

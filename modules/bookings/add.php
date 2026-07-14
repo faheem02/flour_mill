@@ -7,7 +7,7 @@ $page_title = 'New Booking';
 require_once '../../includes/db.php';
 include '../../includes/header.php';
 
-$bag_types = $conn->query("SELECT id, name, bag_weight_kg FROM bag_types WHERE status='active' ORDER BY name");
+$warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active' ORDER BY name");
 
 $error = $success = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -17,11 +17,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $advance_amount = str_replace(',', '', $_POST['advance_amount']);
     $notes          = sanitize($_POST['notes']);
 
-    $bag_type_id    = (int)$_POST['bag_type_id'];
     $bag_qty        = (int)str_replace(',', '', $_POST['bag_qty']);
     $bag_capacity   = 50;
     $ownership      = $_POST['ownership'] ?? 'company';
     $bag_rate       = str_replace(',', '', $_POST['bag_rate'] ?? 0);
+    $bag_warehouse_id = !empty($_POST['bag_warehouse_id']) ? (int)$_POST['bag_warehouse_id'] : null;
+
+    // Auto-select first active bag type
+    $bt_row = $conn->query("SELECT id FROM bag_types WHERE status='active' LIMIT 1")->fetch_assoc();
+    $bag_type_id = $bt_row ? $bt_row['id'] : 0;
 
     $moisture       = str_replace(',', '', $_POST['moisture_percent'] ?? 0);
     $katt_per_bag   = str_replace(',', '', $_POST['katt_per_bag'] ?? 0);
@@ -45,9 +49,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute();
             $booking_id = $conn->insert_id;
 
-            $stmt2 = $conn->prepare("INSERT INTO booking_bags (booking_id, bag_type_id, quantity, bag_capacity_kg, ownership, bag_rate) VALUES (?, ?, ?, ?, ?, ?)");
-            $stmt2->bind_param("iiidsd", $booking_id, $bag_type_id, $bag_qty, $bag_capacity, $ownership, $bag_rate);
+            $stmt2 = $conn->prepare("INSERT INTO booking_bags (booking_id, bag_type_id, quantity, bag_capacity_kg, ownership, bag_rate, bag_warehouse_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt2->bind_param("iiidsdi", $booking_id, $bag_type_id, $bag_qty, $bag_capacity, $ownership, $bag_rate, $bag_warehouse_id);
             $stmt2->execute();
+
+            // Deduct company bags from stock
+            if ($ownership === 'company' && $bag_warehouse_id > 0 && $bag_qty > 0) {
+                $conn->query("UPDATE bag_stock SET qty = GREATEST(qty - $bag_qty, 0) WHERE warehouse_id = $bag_warehouse_id");
+                $bal = $conn->query("SELECT qty FROM bag_stock WHERE warehouse_id=$bag_warehouse_id")->fetch_assoc();
+                $bal_qty = $bal ? $bal['qty'] : 0;
+                $conn->query("INSERT INTO bag_stock_ledger (date, warehouse_id, qty_in, qty_out, balance_qty, type, reference_id, notes)
+                    VALUES ('$date', $bag_warehouse_id, 0, $bag_qty, $bal_qty, 'booking_out', $booking_id, 'Booking $booking_no - Company bags sent to farmer')");
+            }
 
             if ($advance_amount > 0) {
                 $farmer_name = $conn->query("SELECT name FROM farmers WHERE id=$farmer_id")->fetch_row()[0];
@@ -109,17 +122,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="row">
                 <div class="col-md-3">
                     <div class="form-group">
-                        <label>Bag Type <span class="text-danger">*</span></label>
-                        <select name="bag_type_id" class="form-control" required>
-                            <option value="">-- Select Bag --</option>
-                            <?php while ($bt = $bag_types->fetch_assoc()): ?>
-                            <option value="<?= $bt['id'] ?>"><?= htmlspecialchars($bt['name']) ?></option>
-                            <?php endwhile; ?>
-                        </select>
-                    </div>
-                </div>
-                <div class="col-md-2">
-                    <div class="form-group">
                         <label>Bag Quantity <span class="text-danger">*</span></label>
                         <input type="number" name="bag_qty" id="bagQty" class="form-control" placeholder="0" min="1" required>
                     </div>
@@ -155,6 +157,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <div class="form-group">
                         <label>Bag Rate (per bag)</label>
                         <input type="text" name="bag_rate" class="form-control" placeholder="0.00">
+                    </div>
+                </div>
+            </div>
+            <div class="row" id="bagWarehouseRow">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Bag Warehouse <small class="text-muted">(stock from)</small></label>
+                        <select name="bag_warehouse_id" id="bagWarehouseId" class="form-control">
+                            <option value="">Select</option>
+                            <?php while ($w = $warehouses->fetch_assoc()): ?>
+                            <option value="<?= $w['id'] ?>"><?= htmlspecialchars($w['name']) ?></option>
+                            <?php endwhile; ?>
+                        </select>
+                        <small class="text-muted" id="bagStockInfo"></small>
                     </div>
                 </div>
             </div>
@@ -281,9 +297,23 @@ $('form').on('submit', function() {
 $('input[name="ownership"]').on('change', function() {
     if ($(this).val() === 'farmer') {
         $('#bagRateRow').slideDown();
+        $('#bagWarehouseRow').slideUp();
     } else {
         $('#bagRateRow').slideUp();
         $('input[name="bag_rate"]').val('');
+        $('#bagWarehouseRow').slideDown();
+    }
+});
+
+// === Check bag stock on warehouse change ===
+$('#bagWarehouseId').on('change', function() {
+    var bt = $('select[name="bag_type_id"]').val();
+    var wh = $(this).val();
+    var qty = $('#bagQty').val() || 0;
+    if (bt && wh) {
+        $.get('../bags/get_bag_stock.php', { bag_type_id: bt, warehouse_id: wh }, function(d) {
+            $('#bagStockInfo').text('Available: ' + d.qty + ' bags');
+        });
     }
 });
 

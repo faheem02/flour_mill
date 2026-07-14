@@ -25,6 +25,24 @@ try {
         $conn->query("UPDATE bookings SET status = 'partial' WHERE id = {$arrival['booking_id']} AND received_qty > 0 AND received_qty < booked_qty");
     }
 
+    // Reverse bag stock (only if bags were added)
+    if ($arrival['num_bags'] > 0 && $arrival['warehouse_id'] > 0 && $arrival['booking_id'] > 0) {
+        $bb = $conn->query("SELECT ownership FROM booking_bags WHERE booking_id={$arrival['booking_id']} LIMIT 1")->fetch_assoc();
+        $should_reverse = false;
+        if ($bb && $bb['ownership'] === 'company') {
+            $should_reverse = true;
+        } elseif ($bb && $bb['ownership'] === 'farmer' && $arrival['bag_amount'] > 0) {
+            $should_reverse = true;
+        }
+        if ($should_reverse) {
+            $conn->query("UPDATE bag_stock SET qty = GREATEST(qty - {$arrival['num_bags']}, 0) WHERE warehouse_id = {$arrival['warehouse_id']}");
+            $bal = $conn->query("SELECT qty FROM bag_stock WHERE warehouse_id={$arrival['warehouse_id']}")->fetch_assoc();
+            $bal_qty = $bal ? $bal['qty'] : 0;
+            $conn->query("INSERT INTO bag_stock_ledger (date, warehouse_id, qty_in, qty_out, balance_qty, type, reference_id, notes)
+                VALUES (CURDATE(), {$arrival['warehouse_id']}, 0, {$arrival['num_bags']}, $bal_qty, 'arrival_in', {$arrival['id']}, 'Reversed: arrival deleted')");
+        }
+    }
+
     $conn->query("DELETE FROM wheat_arrivals WHERE id = $id");
     $conn->commit();
 } catch (Exception $e) {

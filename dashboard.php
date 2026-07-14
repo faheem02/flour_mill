@@ -31,8 +31,6 @@ $today_receipt = $conn->query("SELECT COALESCE(SUM(credit),0) AS t FROM customer
 // Total receivables (customers with debit balance)
 $total_receivables = $conn->query("SELECT COALESCE(SUM(balance),0) AS t FROM customers WHERE balance > 0")->fetch_assoc()['t'];
 
-// Total payables (suppliers with credit balance)
-$total_payables = $conn->query("SELECT COALESCE(SUM(balance),0) AS t FROM suppliers WHERE balance > 0")->fetch_assoc()['t'];
 
 // Cash balance
 $cash_balance = $conn->query("SELECT COALESCE(balance,0) AS t FROM bank_accounts WHERE account_name='Main Cash'")->fetch_assoc()['t'];
@@ -140,21 +138,6 @@ $today_cash_out = $conn->query("SELECT COALESCE(SUM(amount),0) AS t FROM expense
         </div>
     </div>
     <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card border-left-secondary shadow h-100 py-2 card-dashboard">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">Payables</div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">Rs <?= money($total_payables) ?></div>
-                    </div>
-                    <div class="col-auto">
-                        <i class="fas fa-credit-card fa-2x text-gray-300"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-3 col-md-6 mb-4">
         <div class="card border-left-success shadow h-100 py-2 card-dashboard">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
@@ -222,8 +205,8 @@ $today_cash_out = $conn->query("SELECT COALESCE(SUM(amount),0) AS t FROM expense
             <div class="card-body">
                 <div class="row">
                     <div class="col-4 text-center py-2">
-                        <a href="<?= $base_url ?>modules/purchases/add.php" class="btn btn-primary btn-sm btn-block">
-                            <i class="fas fa-shopping-cart"></i> Purchase
+                        <a href="<?= $base_url ?>modules/stock/issuance.php" class="btn btn-primary btn-sm btn-block">
+                            <i class="fas fa-exchange-alt"></i> Issuance
                         </a>
                     </div>
                     <div class="col-4 text-center py-2">
@@ -244,11 +227,6 @@ $today_cash_out = $conn->query("SELECT COALESCE(SUM(amount),0) AS t FROM expense
                     <div class="col-4 text-center py-2">
                         <a href="<?= $base_url ?>modules/customers/receipt.php" class="btn btn-secondary btn-sm btn-block">
                             <i class="fas fa-money-bill-wave"></i> Receipt
-                        </a>
-                    </div>
-                    <div class="col-4 text-center py-2">
-                        <a href="<?= $base_url ?>modules/suppliers/payment.php" class="btn btn-dark btn-sm btn-block">
-                            <i class="fas fa-credit-card"></i> Payment
                         </a>
                     </div>
                 </div>

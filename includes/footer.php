@@ -1,17 +1,11 @@
 <?php require_once __DIR__ . '/config.php'; ?>
                 </div>
             </div>
-        </div>
 
-        <!-- FIXED FOOTER -->
-        <footer class="sticky-footer bg-white fixed-footer">
-            <div class="container my-auto">
-                <div class="copyright text-center my-auto">
-                    <span>Copyright &copy; <?= date('Y') ?> Flour Mill Management System</span>
-                </div>
-            </div>
+        <footer style="background:#fff; border-top:1px solid #e3e6f0; padding:12px 0; text-align:center;">
+            <span class="text-muted small">Copyright &copy; <?= date('Y') ?> Flour Mill Management System</span>
         </footer>
-    </div>
+        </div>
 
     <a class="scroll-to-top rounded" href="#page-top">
         <i class="fas fa-angle-up"></i>
@@ -25,10 +19,8 @@
 
     <script>
     $(document).ready(function() {
-        // ===== SIDEBAR TOGGLE =====
         function isMobile() { return $(window).width() < 768; }
 
-        // Desktop sidebar toggle (button at bottom of sidebar)
         $('#sidebarToggle').off('click');
         $('#sidebarToggle').on('click', function(e) {
             e.preventDefault();
@@ -40,7 +32,6 @@
             }
         });
 
-        // Topbar hamburger toggle (visible on all screens)
         $('#sidebarToggleTop').off('click');
         $('#sidebarToggleTop').on('click', function(e) {
             e.preventDefault();
@@ -51,35 +42,26 @@
                 $('body').toggleClass('sidebar-collapsed');
             }
         });
-        // Close sidebar on overlay click
         $('#sidebarOverlay').on('click', function() {
             $('.sidebar').removeClass('mobile-open');
             $('#sidebarOverlay').removeClass('active');
         });
 
-        // Neutralize any SB Admin 2 auto-toggle on resize (uses sidebar-toggled)
         $('body').removeClass('sidebar-toggled');
         $('.sidebar').removeClass('toggled');
-        // Also clean them up whenever resize might have added them
         $(window).on('resize', function() {
             $('body').removeClass('sidebar-toggled');
             $('.sidebar').removeClass('toggled');
         });
 
-        // Initialize DataTables on all tables with class 'datatable'
         $('.datatable').each(function() {
             if (!$.fn.dataTable.isDataTable(this)) {
-                $(this).DataTable({
-                    pageLength: 25,
-                    order: [[0, 'desc']]
-                });
+                $(this).DataTable({ pageLength: 25, order: [[0, 'desc']] });
             }
         });
 
-        // Auto-hide alerts after 5 seconds
         $('.alert-auto').delay(5000).fadeOut('slow');
 
-        // On mobile: close sidebar when a page link is clicked inside it
         $('.sidebar .collapse-item').on('click', function() {
             if (isMobile()) {
                 $('.sidebar').removeClass('mobile-open');

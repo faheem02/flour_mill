@@ -27,8 +27,8 @@ $expenses = $conn->query("SELECT COUNT(*) as cnt, COALESCE(SUM(amount),0) as amt
 // Today's receipts
 $receipts = $conn->query("SELECT COALESCE(SUM(credit),0) as amt FROM customer_ledger WHERE date='$date' AND type='receipt'")->fetch_assoc();
 
-// Today's payments
-$payments = $conn->query("SELECT COALESCE(SUM(credit),0) as amt FROM supplier_ledger WHERE date='$date' AND type='payment'")->fetch_assoc();
+// Today's payments (supplier module removed)
+$payments = ['amt' => 0];
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-chart-bar mr-1"></i> Daily Summary</h1>

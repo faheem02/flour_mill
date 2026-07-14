@@ -6,11 +6,11 @@ function sanitize($value) {
 }
 
 function money($amount) {
-    return number_format($amount, 2);
+    return number_format($amount, 0);
 }
 
 function qty($qty) {
-    return number_format($qty, 3);
+    return number_format($qty, 0);
 }
 
 function navActive($page, $current) {

@@ -13,12 +13,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save'])) {
     $name = sanitize($_POST['name']);
     $bag_weight_kg = str_replace(',', '', $_POST['bag_weight_kg']);
     $empty_bag_cost = str_replace(',', '', $_POST['empty_bag_cost']);
+    $rate_per_bag = str_replace(',', '', $_POST['rate_per_bag'] ?? 0);
 
     if ($id) {
-        $conn->query("UPDATE bag_types SET name='$name', bag_weight_kg='$bag_weight_kg', empty_bag_cost='$empty_bag_cost' WHERE id=$id");
+        $conn->query("UPDATE bag_types SET name='$name', bag_weight_kg='$bag_weight_kg', empty_bag_cost='$empty_bag_cost', rate_per_bag='$rate_per_bag' WHERE id=$id");
         setFlash("Bag type updated.");
     } else {
-        $conn->query("INSERT INTO bag_types (name, bag_weight_kg, empty_bag_cost) VALUES ('$name', '$bag_weight_kg', '$empty_bag_cost')");
+        $conn->query("INSERT INTO bag_types (name, bag_weight_kg, empty_bag_cost, rate_per_bag) VALUES ('$name', '$bag_weight_kg', '$empty_bag_cost', '$rate_per_bag')");
         setFlash("Bag type added.");
     }
     header("Location: bags.php");
@@ -53,6 +54,7 @@ if (isset($_GET['edit'])) {
                         <th>Name</th>
                         <th class="text-right">Bag Weight (KG)</th>
                         <th class="text-right">Empty Bag Cost</th>
+                        <th class="text-right">Rate/Bag</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -63,6 +65,7 @@ if (isset($_GET['edit'])) {
                         <td><?= htmlspecialchars($row['name']) ?></td>
                         <td class="text-right"><?= qty($row['bag_weight_kg']) ?></td>
                         <td class="text-right"><?= money($row['empty_bag_cost']) ?></td>
+                        <td class="text-right"><?= money($row['rate_per_bag']) ?></td>
                         <td class="text-nowrap">
                             <div class="btn-group btn-group-sm">
                                 <a href="bags.php?edit=<?= $row['id'] ?>" class="btn btn-warning btn-action" title="Edit"><i class="fas fa-edit"></i></a>
@@ -96,6 +99,10 @@ if (isset($_GET['edit'])) {
                         <label>Empty Bag Cost (Rs)</label>
                         <input type="text" name="empty_bag_cost" class="form-control" placeholder="0.00">
                     </div>
+                    <div class="form-group">
+                        <label>Rate per Bag (Rs) <small class="text-muted">(cost when given to farmer)</small></label>
+                        <input type="text" name="rate_per_bag" class="form-control" placeholder="20 / 30 / 40">
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="submit" name="save" class="btn btn-primary">Save</button>
@@ -125,6 +132,10 @@ if (isset($_GET['edit'])) {
                     <div class="form-group">
                         <label>Empty Bag Cost (Rs)</label>
                         <input type="text" name="empty_bag_cost" class="form-control" value="<?= money($edit_row['empty_bag_cost']) ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>Rate per Bag (Rs) <small class="text-muted">(cost when given to farmer)</small></label>
+                        <input type="text" name="rate_per_bag" class="form-control" value="<?= money($edit_row['rate_per_bag']) ?>">
                     </div>
                 </div>
                 <div class="modal-footer">

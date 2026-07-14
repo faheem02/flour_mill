@@ -2,12 +2,20 @@
 session_start();
 require_once '../../includes/config.php';
 if (!isset($_SESSION['user_id'])) { header("Location: " . $base_url . "auth/login.php"); exit; }
-$active_page = 'sale_add';
-$page_title = 'New Sale';
+$active_page = 'sale_list';
+$page_title = 'Edit Sale';
 require_once '../../includes/db.php';
 include '../../includes/header.php';
 
+$id = (int)($_GET['id'] ?? 0);
+if (!$id) { header("Location: list.php"); exit; }
+
 $error = $success = '';
+
+$sale = $conn->query("SELECT * FROM sales WHERE id = $id")->fetch_assoc();
+if (!$sale) { header("Location: list.php"); exit; }
+
+$sale_items = $conn->query("SELECT si.*, p.name as product_name FROM sale_items si JOIN products p ON si.product_id=p.id WHERE si.sale_id=$id");
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $customer_id    = (int)$_POST['customer_id'];
@@ -40,27 +48,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     elseif ($warehouse_id <= 0) { $error = "Please select a warehouse."; }
     elseif (empty($delivery_type)) { $error = "Please select delivery type."; }
     else {
-        $stock_errors = [];
-        foreach ($product_ids as $i => $pid) {
-            $q = str_replace(',', '', $qtys[$i]);
-            if ($q <= 0) continue;
-            $wh_stock = $conn->query("SELECT COALESCE(stock_qty,0) AS s FROM warehouse_stock WHERE warehouse_id = $warehouse_id AND product_id = $pid")->fetch_assoc();
-            $avail = $wh_stock ? (float)$wh_stock['s'] : 0;
-            if ($q > $avail) {
-                $pname = $conn->query("SELECT name FROM products WHERE id = $pid")->fetch_assoc()['name'] ?? "Product #$pid";
-                $stock_errors[] = "$pname: requested " . qty($q) . " KG, available " . qty($avail) . " KG";
-            }
-        }
-        if (!empty($stock_errors)) {
-            $error = "Insufficient stock in selected warehouse:<br>" . implode("<br>", $stock_errors);
-        } else {
         $conn->begin_transaction();
         try {
-            $stmt = $conn->prepare("INSERT INTO sales (customer_id, warehouse_id, date, invoice_no, total_qty, total_amount, paid_amount, delivery_type, freight_amount, vehicle_no, driver_name, driver_mobile, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("iisddddsdssss", $customer_id, $warehouse_id, $date, $invoice_no, $total_qty, $grand_total, $paid_amount, $delivery_type, $freight_amount, $vehicle_no, $driver_name, $driver_mobile, $notes);
-            $stmt->execute();
-            $sale_id = $conn->insert_id;
+            // 1) Reverse old stock
+            $old_items = $conn->query("SELECT * FROM sale_items WHERE sale_id=$id");
+            while ($oi = $old_items->fetch_assoc()) {
+                $conn->query("UPDATE products SET stock_qty = stock_qty + {$oi['qty']} WHERE id = {$oi['product_id']}");
+                $conn->query("UPDATE warehouse_stock SET stock_qty = stock_qty + {$oi['qty']} WHERE warehouse_id = {$sale['warehouse_id']} AND product_id = {$oi['product_id']}");
+            }
 
+            // 2) Reverse customer ledger
+            $conn->query("DELETE FROM customer_ledger WHERE type='sale' AND reference_id=$id");
+            $conn->query("DELETE FROM customer_ledger WHERE type='receipt' AND reference_id=$id");
+            $conn->query("UPDATE customers SET balance = balance - {$sale['total_amount']} WHERE id = {$sale['customer_id']}");
+            if ($sale['paid_amount'] > 0) {
+                $conn->query("UPDATE customers SET balance = balance + {$sale['paid_amount']} WHERE id = {$sale['customer_id']}");
+            }
+
+            // 3) Reverse journal entry
+            $conn->query("DELETE FROM journal_entry_items WHERE journal_id IN (SELECT id FROM journal_entries WHERE description LIKE '%Inv: {$sale['invoice_no']}%')");
+            $conn->query("DELETE FROM journal_entries WHERE description LIKE '%Inv: {$sale['invoice_no']}%'");
+
+            // 4) Delete old items
+            $conn->query("DELETE FROM sale_items WHERE sale_id = $id");
+
+            // 5) Update sale header
+            $stmt = $conn->prepare("UPDATE sales SET customer_id=?, warehouse_id=?, date=?, invoice_no=?, total_qty=?, total_amount=?, paid_amount=?, delivery_type=?, freight_amount=?, vehicle_no=?, driver_name=?, driver_mobile=?, notes=? WHERE id=?");
+            $stmt->bind_param("iiisddddsdssssi", $customer_id, $warehouse_id, $date, $invoice_no, $total_qty, $grand_total, $paid_amount, $delivery_type, $freight_amount, $vehicle_no, $driver_name, $driver_mobile, $notes, $id);
+            $stmt->execute();
+
+            // 6) Insert new items + apply stock
             $stmt2 = $conn->prepare("INSERT INTO sale_items (sale_id, product_id, qty, rate, amount) VALUES (?, ?, ?, ?, ?)");
             $stmt3 = $conn->prepare("INSERT INTO stock_ledger (product_id, date, type, reference_id, warehouse_id, qty_out, balance_qty, notes)
                 VALUES (?, ?, 'sale', ?, ?, ?, (SELECT COALESCE(stock_qty,0) FROM products WHERE id=?), 'Sale - $invoice_no')");
@@ -71,27 +88,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $a = str_replace(',', '', $amounts[$i]);
                 if ($q <= 0) continue;
 
-                $stmt2->bind_param("iiddd", $sale_id, $pid, $q, $r, $a);
+                $stmt2->bind_param("iiddd", $id, $pid, $q, $r, $a);
                 $stmt2->execute();
 
                 $conn->query("UPDATE products SET stock_qty = stock_qty - $q WHERE id = $pid");
-                $conn->query("UPDATE warehouse_stock SET stock_qty = stock_qty - $q WHERE warehouse_id = $warehouse_id AND product_id = $pid");
-                $stmt3->bind_param("isiiii", $pid, $date, $sale_id, $warehouse_id, $q, $pid);
+                $conn->query("UPDATE warehouse_stock SET stock_qty = GREATEST(stock_qty - $q, 0) WHERE warehouse_id = $warehouse_id AND product_id = $pid");
+                $stmt3->bind_param("isiiii", $pid, $date, $id, $warehouse_id, $q, $pid);
                 $stmt3->execute();
             }
 
+            // 7) Customer ledger — new debit
             $stmt4 = $conn->prepare("INSERT INTO customer_ledger (customer_id, date, type, reference_id, debit, balance, notes)
                 VALUES (?, ?, 'sale', ?, ?, (SELECT COALESCE(balance,0)+? FROM customers WHERE id=?), 'Sale - $invoice_no')");
-            $stmt4->bind_param("isiddi", $customer_id, $date, $sale_id, $grand_total, $grand_total, $customer_id);
+            $stmt4->bind_param("isiddi", $customer_id, $date, $id, $grand_total, $grand_total, $customer_id);
             $stmt4->execute();
             $conn->query("UPDATE customers SET balance = balance + $grand_total WHERE id = $customer_id");
 
+            // 8) Payment receipt if any
             if ($paid_amount > 0) {
                 $conn->query("INSERT INTO customer_ledger (customer_id, date, type, reference_id, credit, balance, notes)
-                    VALUES ($customer_id, '$date', 'receipt', $sale_id, $paid_amount, (SELECT COALESCE(balance,0)-$paid_amount FROM customers WHERE id=$customer_id), 'Payment on sale - $invoice_no')");
+                    VALUES ($customer_id, '$date', 'receipt', $id, $paid_amount, (SELECT COALESCE(balance,0)-$paid_amount FROM customers WHERE id=$customer_id), 'Payment on sale - $invoice_no')");
                 $conn->query("UPDATE customers SET balance = balance - $paid_amount WHERE id = $customer_id");
             }
 
+            // 9) Journal entry
             $debits = [];
             $credits = [13 => $grand_total];
             if ($paid_amount > 0) $debits[2] = $paid_amount;
@@ -100,17 +120,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             autoJournalEntry($date, "Sale to customer (Inv: $invoice_no) [$delivery_type]", $debits, $credits, $_SESSION['user_id']);
 
             $conn->commit();
-            $success = "Sale recorded successfully. Invoice: $invoice_no";
+            $success = "Sale updated successfully.";
+            // Reload sale data
+            $sale = $conn->query("SELECT * FROM sales WHERE id = $id")->fetch_assoc();
+            $sale_items = $conn->query("SELECT si.*, p.name as product_name FROM sale_items si JOIN products p ON si.product_id=p.id WHERE si.sale_id=$id");
         } catch (Exception $e) {
             $conn->rollback();
             $error = "Error: " . $e->getMessage();
-        }
         }
     }
 }
 
 $customers = $conn->query("SELECT id, name, balance FROM customers ORDER BY name");
+$products  = $conn->query("SELECT p.id, p.name, p.sale_price, p.cost_rate, p.stock_qty,
+  (SELECT pi.rate_per_kg FROM production_items pi 
+   JOIN productions pr ON pi.production_id = pr.id 
+   WHERE pi.product_id = p.id 
+   ORDER BY pr.date DESC, pr.id DESC LIMIT 1) as latest_cost_rate
+  FROM products p WHERE status='active' AND name != 'Wheat (Gandam)' ORDER BY name");
 $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active' AND type IN ('mill','finished') ORDER BY type, name");
+
+// Build existing items JSON for JS
+$existing_items = [];
+$si_clone = $conn->query("SELECT si.*, p.name as product_name, p.stock_qty as prod_stock,
+  (SELECT pi.rate_per_kg FROM production_items pi 
+   JOIN productions pr ON pi.production_id = pr.id 
+   WHERE pi.product_id = p.id 
+   ORDER BY pr.date DESC, pr.id DESC LIMIT 1) as latest_cost_rate
+  FROM sale_items si JOIN products p ON si.product_id=p.id WHERE si.sale_id=$id");
+while ($ei = $si_clone->fetch_assoc()) {
+    $existing_items[] = $ei;
+}
 ?>
 <style>
     .summary-card { border-left: 4px solid var(--gold); }
@@ -130,7 +170,7 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
 </style>
 
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
-    <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-cash-register mr-1"></i> New Sale</h1>
+    <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-edit mr-1"></i> Edit Sale — <?= htmlspecialchars($sale['invoice_no']) ?></h1>
     <a href="list.php" class="btn btn-sm btn-secondary"><i class="fas fa-arrow-left mr-1"></i> Sales List</a>
 </div>
 
@@ -138,6 +178,7 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
 <?php if ($success): ?><div class="alert alert-success alert-auto"><?= $success ?></div><?php endif; ?>
 
 <form method="POST" id="saleForm">
+<input type="hidden" name="id" value="<?= $id ?>">
 
 <!-- Row 1: Sale Details -->
 <div class="card shadow mb-3">
@@ -150,7 +191,7 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
                     <select name="customer_id" id="customerSelect" class="form-control" required>
                         <option value="">Select Customer</option>
                         <?php while ($c = $customers->fetch_assoc()): ?>
-                        <option value="<?= $c['id'] ?>" data-balance="<?= $c['balance'] ?>"><?= htmlspecialchars($c['name']) ?></option>
+                        <option value="<?= $c['id'] ?>" data-balance="<?= $c['balance'] ?>" <?= $c['id'] == $sale['customer_id'] ? 'selected' : '' ?>><?= htmlspecialchars($c['name']) ?></option>
                         <?php endwhile; ?>
                     </select>
                 </div>
@@ -158,22 +199,22 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
             <div class="col-md-2">
                 <div class="form-group">
                     <label>Date <span class="text-danger">*</span></label>
-                    <input type="date" name="date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                    <input type="date" name="date" class="form-control" value="<?= $sale['date'] ?>" required>
                 </div>
             </div>
             <div class="col-md-2">
                 <div class="form-group">
                     <label>Invoice No.</label>
-                    <input type="text" name="invoice_no" class="form-control" value="<?= generateInvoiceNo() ?>">
+                    <input type="text" name="invoice_no" class="form-control" value="<?= htmlspecialchars($sale['invoice_no']) ?>">
                 </div>
             </div>
             <div class="col-md-2">
                 <div class="form-group">
                     <label>Warehouse <span class="text-danger">*</span></label>
-                    <select name="warehouse_id" id="warehouseSelect" class="form-control" required>
+                    <select name="warehouse_id" class="form-control" required>
                         <option value="">Select Warehouse</option>
                         <?php while ($w = $warehouses->fetch_assoc()): ?>
-                        <option value="<?= $w['id'] ?>"><?= htmlspecialchars($w['name']) ?></option>
+                        <option value="<?= $w['id'] ?>" <?= $w['id'] == $sale['warehouse_id'] ? 'selected' : '' ?>><?= htmlspecialchars($w['name']) ?></option>
                         <?php endwhile; ?>
                     </select>
                 </div>
@@ -182,11 +223,11 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
                 <div class="form-group">
                     <label>Delivery Type <span class="text-danger">*</span></label>
                     <div class="d-flex">
-                        <label class="dchk active-del mr-2 mb-0 flex-fill text-center" id="deliveryLabel">
-                            <input type="radio" name="delivery_type" id="deliveryRadio" value="delivery" autocomplete="off" checked class="d-none"> <i class="fas fa-truck fa-sm"></i> Delivery
+                        <label class="dchk <?= $sale['delivery_type'] === 'delivery' ? 'active-del' : '' ?> mr-2 mb-0 flex-fill text-center" id="deliveryLabel">
+                            <input type="radio" name="delivery_type" id="deliveryRadio" value="delivery" autocomplete="off" <?= $sale['delivery_type'] === 'delivery' ? 'checked' : '' ?> class="d-none"> <i class="fas fa-truck fa-sm"></i> Delivery
                         </label>
-                        <label class="dchk mb-0 flex-fill text-center" id="pickupLabel">
-                            <input type="radio" name="delivery_type" id="pickupRadio" value="pickup" autocomplete="off" class="d-none"> <i class="fas fa-store fa-sm"></i> Pickup
+                        <label class="dchk <?= $sale['delivery_type'] === 'pickup' ? 'active-pick' : '' ?> mb-0 flex-fill text-center" id="pickupLabel">
+                            <input type="radio" name="delivery_type" id="pickupRadio" value="pickup" autocomplete="off" <?= $sale['delivery_type'] === 'pickup' ? 'checked' : '' ?> class="d-none"> <i class="fas fa-store fa-sm"></i> Pickup
                         </label>
                     </div>
                 </div>
@@ -203,19 +244,19 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
             <div class="col-md-4">
                 <div class="form-group">
                     <label>Vehicle No.</label>
-                    <input type="text" name="vehicle_no" id="vehicleNo" class="form-control" placeholder="e.g. LEH-1234">
+                    <input type="text" name="vehicle_no" id="vehicleNo" class="form-control" placeholder="e.g. LEH-1234" value="<?= htmlspecialchars($sale['vehicle_no'] ?? '') ?>">
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="form-group">
                     <label>Driver Name</label>
-                    <input type="text" name="driver_name" id="driverName" class="form-control" placeholder="Driver name">
+                    <input type="text" name="driver_name" id="driverName" class="form-control" placeholder="Driver name" value="<?= htmlspecialchars($sale['driver_name'] ?? '') ?>">
                 </div>
             </div>
             <div class="col-md-4">
                 <div class="form-group">
                     <label>Driver Mobile</label>
-                    <input type="text" name="driver_mobile" id="driverMobile" class="form-control" placeholder="03XX-XXXXXXX" oninput="this.value = this.value.replace(/[^0-9\-]/g,'')">
+                    <input type="text" name="driver_mobile" id="driverMobile" class="form-control" placeholder="03XX-XXXXXXX" oninput="this.value = this.value.replace(/[^0-9\-]/g,'')" value="<?= htmlspecialchars($sale['driver_mobile'] ?? '') ?>">
                 </div>
             </div>
         </div>
@@ -247,18 +288,7 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
-                <tbody>
-                    <tr>
-                        <td>
-                            <select name="product_id[]" class="form-control product-select" required onchange="setRate(this)">
-                                <option value="">Select Warehouse First</option>
-                            </select>
-                        </td>
-                        <td><input type="text" name="qty[]" class="form-control text-right" placeholder="0" oninput="calcRow(this);calcTotals()"></td>
-                        <td><input type="text" name="rate[]" class="form-control text-right" placeholder="0.00" oninput="calcRow(this);calcTotals()"></td>
-                        <td><input type="text" name="amount[]" class="form-control text-right" placeholder="0.00" readonly style="background:#f0f0f0;font-weight:600"></td>
-                        <td class="text-center"><button type="button" class="btn btn-danger btn-sm" onclick="this.closest('tr').remove();calcTotals()"><i class="fas fa-times"></i></button></td>
-                    </tr>
+                <tbody id="itemsBody">
                 </tbody>
                 <tfoot>
                     <tr class="table-active">
@@ -279,7 +309,7 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
         <div class="card shadow mb-4" style="height:calc(100% - 0px)">
             <div class="card-header"><h6 class="font-weight-bold m-0"><i class="fas fa-sticky-note mr-1"></i> Notes</h6></div>
             <div class="card-body">
-                <textarea name="notes" class="form-control" rows="6" placeholder="Any additional notes for this sale..."></textarea>
+                <textarea name="notes" class="form-control" rows="6" placeholder="Any additional notes for this sale..."><?= htmlspecialchars($sale['notes'] ?? '') ?></textarea>
             </div>
         </div>
     </div>
@@ -293,7 +323,7 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
                 </div>
                 <div class="sum-row" style="align-items:center">
                     <span>Freight + Load</span>
-                    <input type="text" name="freight_amount" id="freightInput" class="form-control form-control-sm text-right" style="width:160px" placeholder="0.00" value="0" oninput="calcTotals()">
+                    <input type="text" name="freight_amount" id="freightInput" class="form-control form-control-sm text-right" style="width:160px" placeholder="0.00" value="<?= $sale['freight_amount'] ?? 0 ?>" oninput="calcTotals()">
                 </div>
                 <div class="sum-row grand">
                     <span>Grand Total</span>
@@ -305,7 +335,7 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
                 </div>
                 <div class="sum-row recv" style="align-items:center">
                     <span>Total Receiving</span>
-                    <input type="text" name="paid_amount" id="totalReceiving" class="form-control form-control-sm text-right font-weight-bold" style="width:160px;border-color:var(--gold)" placeholder="0.00" value="0" oninput="calcTotals()">
+                    <input type="text" name="paid_amount" id="totalReceiving" class="form-control form-control-sm text-right font-weight-bold" style="width:160px;border-color:var(--gold)" placeholder="0.00" value="<?= $sale['paid_amount'] ?>" oninput="calcTotals()">
                 </div>
                 <div class="sum-row rem">
                     <span>Remaining</span>
@@ -315,7 +345,7 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
         </div>
 
         <button type="submit" class="btn btn-primary btn-block btn-lg shadow" id="submitBtn">
-            <i class="fas fa-save mr-1"></i> Save Sale
+            <i class="fas fa-save mr-1"></i> Update Sale
         </button>
     </div>
 </div>
@@ -323,46 +353,35 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
 </form>
 
 <script>
-var productsData = '';
+var productsData = '<?php $products->data_seek(0); while ($pr = $products->fetch_assoc()): ?><?= $pr["id"] ?>|<?= htmlspecialchars($pr["name"]) ?>|<?= ($pr["latest_cost_rate"] ?: $pr["cost_rate"]) ?: $pr["sale_price"] ?>|<?= $pr["stock_qty"] ?>|<?= qty($pr["stock_qty"]) ?>;<?php endwhile; ?>';
 
-function buildProductOptions() {
+var existingItems = <?= json_encode($existing_items) ?>;
+
+function buildProductOptions(selectedId) {
     var rows = productsData.split(';').filter(Boolean);
     var opts = '<option value="">Select Product</option>';
     rows.forEach(function(r) {
         var p = r.split('|');
-        opts += '<option value="'+p[0]+'" data-price="'+p[2]+'" data-stock="'+p[3]+'">'+p[1]+' (Stock: '+p[4]+')</option>';
+        var sel = (p[0] == selectedId) ? ' selected' : '';
+        opts += '<option value="'+p[0]+'" data-price="'+p[2]+'" data-stock="'+p[3]+'"'+sel+'>'+p[1]+' (Stock: '+p[4]+')</option>';
     });
     return opts;
 }
 
-function refreshProductDropdowns() {
-    var opts = buildProductOptions();
-    $('.product-select').each(function() {
-        var val = $(this).val();
-        $(this).html(opts);
-        if (val && $(this).find('option[value="'+val+'"]').length) {
-            $(this).val(val);
-        }
+function loadExistingItems() {
+    var html = '';
+    existingItems.forEach(function(it) {
+        html += '<tr>' +
+            '<td><select name="product_id[]" class="form-control" required onchange="setRate(this)">' + buildProductOptions(it.product_id) + '</select></td>' +
+            '<td><input type="text" name="qty[]" class="form-control text-right" placeholder="0" value="' + parseFloat(it.qty).toFixed(3) + '" oninput="calcRow(this);calcTotals()"></td>' +
+            '<td><input type="text" name="rate[]" class="form-control text-right" placeholder="0.00" value="' + parseFloat(it.rate).toFixed(2) + '" oninput="calcRow(this);calcTotals()"></td>' +
+            '<td><input type="text" name="amount[]" class="form-control text-right" placeholder="0.00" value="' + parseFloat(it.amount).toFixed(2) + '" readonly style="background:#f0f0f0;font-weight:600"></td>' +
+            '<td class="text-center"><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove();calcTotals()"><i class="fas fa-times"></i></button></td>' +
+            '</tr>';
     });
+    $('#itemsBody').html(html);
+    calcTotals();
 }
-
-$('#warehouseSelect').on('change', function() {
-    var wh = $(this).val();
-    if (!wh) {
-        productsData = '';
-        refreshProductDropdowns();
-        return;
-    }
-    $.get('get_warehouse_products.php', { warehouse_id: wh }, function(data) {
-        productsData = '';
-        data.forEach(function(p) {
-            var rate = p.rate || p.sale_price || 0;
-            var stockStr = p.stock_qty.toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:3});
-            productsData += p.id + '|' + p.name + '|' + rate + '|' + p.stock_qty + '|' + stockStr + ';';
-        });
-        refreshProductDropdowns();
-    });
-});
 
 function setRate(sel) {
     var price = $(sel).find(':selected').data('price');
@@ -413,9 +432,14 @@ function calcTotals() {
 }
 
 function addRow() {
-    var opts = buildProductOptions();
+    var rows = productsData.split(';').filter(Boolean);
+    var opts = '<option value="">Select Product</option>';
+    rows.forEach(function(r) {
+        var p = r.split('|');
+        opts += '<option value="'+p[0]+'" data-price="'+p[2]+'" data-stock="'+p[3]+'">'+p[1]+' (Stock: '+p[4]+')</option>';
+    });
     var html = '<tr>' +
-        '<td><select name="product_id[]" class="form-control product-select" required onchange="setRate(this)">' + opts + '</select></td>' +
+        '<td><select name="product_id[]" class="form-control" required onchange="setRate(this)">' + opts + '</select></td>' +
         '<td><input type="text" name="qty[]" class="form-control text-right" placeholder="0" oninput="calcRow(this);calcTotals()"></td>' +
         '<td><input type="text" name="rate[]" class="form-control text-right" placeholder="0.00" oninput="calcRow(this);calcTotals()"></td>' +
         '<td><input type="text" name="amount[]" class="form-control text-right" placeholder="0.00" readonly style="background:#f0f0f0;font-weight:600"></td>' +
@@ -438,11 +462,16 @@ $('input[name="delivery_type"]').on('change', function() {
     }
 });
 
-// Customer change — update previous balance
 $('#customerSelect').on('change', function() { calcTotals(); });
 
 // Init
-calcTotals();
+$(function() {
+    loadExistingItems();
+    // Trigger delivery type styling on load
+    if ($('#pickupRadio').is(':checked')) {
+        $('#freightInput').prop('disabled', true);
+    }
+});
 </script>
 
 <?php include '../../includes/footer.php'; ?>

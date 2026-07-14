@@ -9,12 +9,10 @@ require_once '../../includes/functions.php';
 
 $error = $success = '';
 
-$wheat = $conn->query("SELECT id FROM products WHERE name = 'Wheat (Gandam)' LIMIT 1")->fetch_assoc();
-$wheat_pid = $wheat ? $wheat['id'] : 0;
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['transfer_stock'])) {
     $from_wh = (int)$_POST['from_warehouse_id'];
     $to_wh   = (int)$_POST['to_warehouse_id'];
+    $product_id = (int)$_POST['product_id'];
     $bag_qty = (int)str_replace(',', '', $_POST['bag_qty'] ?? 0);
     $qty  = str_replace(',', '', $_POST['qty']);
     $date = $_POST['date'];
@@ -24,32 +22,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['transfer_stock'])) {
         $qty = $bag_qty * 50;
     }
 
-    if ($from_wh <= 0 || $to_wh <= 0 || $wheat_pid <= 0 || $qty <= 0) {
+    if ($from_wh <= 0 || $to_wh <= 0 || $product_id <= 0 || $qty <= 0) {
         $error = "Please fill all required fields.";
     } elseif ($from_wh === $to_wh) {
         $error = "Source and destination warehouse cannot be the same.";
     } else {
-        $stock = $conn->query("SELECT COALESCE(stock_qty,0) AS s FROM warehouse_stock WHERE warehouse_id = $from_wh AND product_id = $wheat_pid")->fetch_assoc();
+        $stock = $conn->query("SELECT COALESCE(stock_qty,0) AS s FROM warehouse_stock WHERE warehouse_id = $from_wh AND product_id = $product_id")->fetch_assoc();
         if (!$stock || $stock['s'] < $qty) {
             $error = "Insufficient stock. Available: " . qty($stock['s'] ?? 0) . " KG";
         } else {
             $conn->begin_transaction();
             try {
                 $conn->query("INSERT INTO warehouse_transfers (date, from_warehouse_id, to_warehouse_id, product_id, qty, notes)
-                    VALUES ('$date', $from_wh, $to_wh, $wheat_pid, $qty, '$notes')");
+                    VALUES ('$date', $from_wh, $to_wh, $product_id, $qty, '$notes')");
                 $transfer_id = $conn->insert_id;
 
-                $conn->query("UPDATE warehouse_stock SET stock_qty = stock_qty - $qty WHERE warehouse_id = $from_wh AND product_id = $wheat_pid");
+                $conn->query("UPDATE warehouse_stock SET stock_qty = stock_qty - $qty WHERE warehouse_id = $from_wh AND product_id = $product_id");
                 $conn->query("INSERT INTO warehouse_stock (warehouse_id, product_id, stock_qty)
-                    VALUES ($to_wh, $wheat_pid, $qty) ON DUPLICATE KEY UPDATE stock_qty = stock_qty + $qty");
+                    VALUES ($to_wh, $product_id, $qty) ON DUPLICATE KEY UPDATE stock_qty = stock_qty + $qty");
 
                 $conn->query("INSERT INTO stock_ledger (product_id, date, type, reference_id, warehouse_id, qty_out, balance_qty, notes)
-                    VALUES ($wheat_pid, '$date', 'transfer', $transfer_id, $from_wh, $qty,
-                        (SELECT COALESCE(stock_qty,0) FROM warehouse_stock WHERE warehouse_id=$from_wh AND product_id=$wheat_pid),
+                    VALUES ($product_id, '$date', 'transfer', $transfer_id, $from_wh, $qty,
+                        (SELECT COALESCE(stock_qty,0) FROM warehouse_stock WHERE warehouse_id=$from_wh AND product_id=$product_id),
                         'Issued to other warehouse')");
                 $conn->query("INSERT INTO stock_ledger (product_id, date, type, reference_id, warehouse_id, qty_in, balance_qty, notes)
-                    VALUES ($wheat_pid, '$date', 'transfer', $transfer_id, $to_wh, $qty,
-                        (SELECT COALESCE(stock_qty,0) FROM warehouse_stock WHERE warehouse_id=$to_wh AND product_id=$wheat_pid),
+                    VALUES ($product_id, '$date', 'transfer', $transfer_id, $to_wh, $qty,
+                        (SELECT COALESCE(stock_qty,0) FROM warehouse_stock WHERE warehouse_id=$to_wh AND product_id=$product_id),
                         'Received from other warehouse')");
 
                 $conn->commit();
@@ -63,6 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['transfer_stock'])) {
 }
 
 $warehouses = $conn->query("SELECT id, name, type FROM warehouses WHERE status='active' ORDER BY name");
+$products = $conn->query("SELECT id, name FROM products WHERE status='active' ORDER BY name");
 
 $wh_stock = $conn->query("
     SELECT ws.warehouse_id, ws.product_id, ws.stock_qty,
@@ -84,19 +83,17 @@ $transfers = $conn->query("
     LIMIT 50
 ");
 
-$wh_stock_map = [];
-if ($wheat_pid > 0) {
-    $ws = $conn->query("SELECT warehouse_id, COALESCE(stock_qty,0) AS s FROM warehouse_stock WHERE product_id = $wheat_pid");
-    while ($r = $ws->fetch_assoc()) {
-        $wh_stock_map[$r['warehouse_id']] = $r['s'];
-    }
+$all_stock_map = [];
+$ws = $conn->query("SELECT warehouse_id, product_id, COALESCE(stock_qty,0) AS s FROM warehouse_stock WHERE stock_qty > 0");
+while ($r = $ws->fetch_assoc()) {
+    $all_stock_map[$r['warehouse_id']][$r['product_id']] = $r['s'];
 }
 
 include '../../includes/header.php';
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
-    <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-exchange-alt mr-1"></i> Wheat Transfer</h1>
-    <a href="warehouse_stock.php" class="btn btn-sm btn-info"><i class="fas fa-boxes mr-1"></i> Warehouse Stock</a>
+    <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-exchange-alt mr-1"></i> Issuance / Transfer</h1>
+    <a href="<?= $base_url ?>modules/production/list.php" class="btn btn-sm btn-info"><i class="fas fa-industry mr-1"></i> Production</a>
 </div>
 
 <?php if ($error): ?><div class="alert alert-danger"><?= $error ?></div><?php endif; ?>
@@ -112,6 +109,15 @@ include '../../includes/header.php';
                     <div class="form-group">
                         <label>Date <span class="text-danger">*</span></label>
                         <input type="date" name="date" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Product <span class="text-danger">*</span></label>
+                        <select name="product_id" id="productSelect" class="form-control" required>
+                            <option value="">Select Product</option>
+                            <?php while ($p = $products->fetch_assoc()): ?>
+                            <option value="<?= $p['id'] ?>"><?= htmlspecialchars($p['name']) ?></option>
+                            <?php endwhile; ?>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label>From Warehouse <span class="text-danger">*</span></label>
@@ -150,7 +156,7 @@ include '../../includes/header.php';
                         <label>Notes</label>
                         <textarea name="notes" class="form-control" rows="2" placeholder="Optional"></textarea>
                     </div>
-                    <button type="submit" name="transfer_stock" class="btn btn-primary btn-block"><i class="fas fa-exchange-alt mr-1"></i> Transfer Wheat</button>
+                    <button type="submit" name="transfer_stock" class="btn btn-primary btn-block"><i class="fas fa-exchange-alt mr-1"></i> Transfer</button>
                 </form>
             </div>
         </div>
@@ -199,9 +205,9 @@ include '../../includes/header.php';
                         <thead class="thead-dark">
                             <tr>
                                 <th>Date</th>
+                                <th>Product</th>
                                 <th>From</th>
                                 <th>To</th>
-                                <th>Product</th>
                                 <th class="text-right">Qty (KG)</th>
                                 <th>Notes</th>
                             </tr>
@@ -210,9 +216,9 @@ include '../../includes/header.php';
                             <?php while ($t = $transfers->fetch_assoc()): ?>
                             <tr>
                                 <td><?= date('d-M-Y', strtotime($t['date'])) ?></td>
+                                <td><strong><?= htmlspecialchars($t['prod_name']) ?></strong></td>
                                 <td><span class="badge badge-danger"><?= htmlspecialchars($t['from_name']) ?></span></td>
                                 <td><span class="badge badge-success"><?= htmlspecialchars($t['to_name']) ?></span></td>
-                                <td><?= htmlspecialchars($t['prod_name']) ?></td>
                                 <td class="text-right font-weight-bold"><?= qty($t['qty']) ?></td>
                                 <td><?= htmlspecialchars($t['notes'] ?? '') ?></td>
                             </tr>
@@ -229,30 +235,33 @@ include '../../includes/header.php';
 </div>
 
 <script>
-var whStockMap = <?= json_encode($wh_stock_map) ?>;
+var allStockMap = <?= json_encode($all_stock_map) ?>;
 
 function calcFromBags() {
     var bagQty = parseFloat($('#bagQtyInput').val()) || 0;
     if (bagQty > 0) {
-        $('#qtyInput').val((bagQty * 50).toFixed(3));
+        $('#qtyInput').val((bagQty * 50).toFixed(0));
+    }
+}
+
+function checkStock() {
+    var wh = $('#fromWh').val();
+    var pid = $('#productSelect').val();
+    if (wh && pid && allStockMap[wh] && allStockMap[wh][pid] !== undefined) {
+        var s = parseFloat(allStockMap[wh][pid]) || 0;
+        $('#availableStock').html(s > 0
+            ? '<span class="text-success">Available: ' + s.toLocaleString() + ' KG</span>'
+            : '<span class="text-danger">No stock in this warehouse</span>');
+    } else if (wh && pid) {
+        $('#availableStock').html('<span class="text-danger">No stock in this warehouse</span>');
+    } else {
+        $('#availableStock').html('');
     }
 }
 
 $(document).ready(function() {
-    function checkStock() {
-        var wh = $('#fromWh').val();
-        if (wh && whStockMap[wh] !== undefined) {
-            var s = parseFloat(whStockMap[wh]) || 0;
-            $('#availableStock').html(s > 0
-                ? '<span class="text-success">Available: ' + s.toLocaleString() + ' KG</span>'
-                : '<span class="text-danger">No wheat stock in this warehouse</span>');
-        } else if (wh) {
-            $('#availableStock').html('<span class="text-danger">No wheat stock in this warehouse</span>');
-        } else {
-            $('#availableStock').html('');
-        }
-    }
     $('#fromWh').on('change', checkStock);
+    $('#productSelect').on('change', checkStock);
     checkStock();
 });
 </script>

@@ -27,7 +27,35 @@ CREATE TABLE IF NOT EXISTS farmers (
     city        VARCHAR(100),
     balance     DECIMAL(12,2) DEFAULT 0.00,
     status      ENUM('active','inactive') DEFAULT 'active',
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- 27. BAG STOCK
+-- ============================================================
+CREATE TABLE IF NOT EXISTS bag_stock (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    warehouse_id    INT NOT NULL,
+    qty             INT DEFAULT 0,
+    UNIQUE KEY uk_wh (warehouse_id),
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id)
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- 28. BAG STOCK LEDGER
+-- ============================================================
+CREATE TABLE IF NOT EXISTS bag_stock_ledger (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    date            DATE NOT NULL,
+    warehouse_id    INT NOT NULL,
+    qty_in          INT DEFAULT 0,
+    qty_out         INT DEFAULT 0,
+    balance_qty     INT DEFAULT 0,
+    type            VARCHAR(30) NOT NULL,
+    reference_id    INT DEFAULT NULL,
+    notes           TEXT,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (warehouse_id) REFERENCES warehouses(id)
 ) ENGINE=InnoDB;
 
 -- ============================================================
@@ -62,6 +90,7 @@ CREATE TABLE IF NOT EXISTS booking_bags (
     bag_capacity_kg DECIMAL(10,2) DEFAULT 50.000,
     ownership       ENUM('company','farmer') NOT NULL DEFAULT 'company',
     bag_rate        DECIMAL(10,2) DEFAULT 0,
+    bag_warehouse_id INT DEFAULT NULL,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE CASCADE,
     FOREIGN KEY (bag_type_id) REFERENCES bag_types(id)
@@ -306,11 +335,18 @@ CREATE TABLE customer_ledger (
 CREATE TABLE sales (
     id              INT AUTO_INCREMENT PRIMARY KEY,
     customer_id     INT NOT NULL,
+    warehouse_id    INT,
     date            DATE NOT NULL,
     invoice_no      VARCHAR(50),
     total_qty       DECIMAL(12,3) DEFAULT 0.000,
     total_amount    DECIMAL(12,2) DEFAULT 0.00,
     paid_amount     DECIMAL(12,2) DEFAULT 0.00,
+    delivery_type   ENUM('delivery','pickup') DEFAULT 'pickup',
+    freight_amount  DECIMAL(12,2) DEFAULT 0.00,
+    vehicle_no      VARCHAR(50),
+    driver_name     VARCHAR(150),
+    driver_mobile   VARCHAR(20),
+    notes           TEXT,
     status          ENUM('pending','completed','returned') DEFAULT 'completed',
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (customer_id) REFERENCES customers(id)
@@ -560,6 +596,7 @@ CREATE TABLE IF NOT EXISTS bag_types (
     name            VARCHAR(100) NOT NULL,
     bag_weight_kg   DECIMAL(10,2) DEFAULT 0,
     empty_bag_cost  DECIMAL(10,2) DEFAULT 0,
+    rate_per_bag    DECIMAL(10,2) DEFAULT 0,
     status          ENUM('active','inactive') DEFAULT 'active',
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
