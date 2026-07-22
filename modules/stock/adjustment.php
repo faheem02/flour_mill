@@ -48,7 +48,10 @@ $adjustments = $conn->query("SELECT sa.*, p.name as product_name FROM stock_adju
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-sliders-h mr-1"></i> Stock Adjustment</h1>
-    <a href="ledger.php" class="btn btn-sm btn-info"><i class="fas fa-book mr-1"></i> Stock Ledger</a>
+    <div>
+        <a href="ledger.php" class="btn btn-sm btn-info"><i class="fas fa-book mr-1"></i> Stock Ledger</a>
+        <button class="btn btn-sm btn-primary ml-1" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+    </div>
 </div>
 
 <?php if ($error): ?><div class="alert alert-danger"><?= $error ?></div><?php endif; ?>

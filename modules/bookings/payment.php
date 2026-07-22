@@ -18,7 +18,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
     if ($amount > 0) {
         $conn->query("INSERT INTO farmer_payments (farmer_id, date, amount, type, booking_id, notes)
             VALUES ($farmer_id, '$date', $amount, 'payment', $booking_id, '$notes')");
-        $conn->query("UPDATE farmers SET balance = balance + $amount WHERE id = $farmer_id");
+        $conn->query("UPDATE farmers SET balance = balance - $amount WHERE id = $farmer_id");
         setFlash("Payment of Rs " . money($amount) . " recorded.");
     }
     header("Location: payment.php?booking_id=$booking_id");
@@ -33,7 +33,10 @@ include '../../includes/header.php';
 // Load booking
 $booking = null;
 if ($booking_id) {
-    $booking = $conn->query("SELECT b.*, f.name AS farmer_name, f.balance AS farmer_balance, f.id AS f_id
+    $booking = $conn->query("SELECT b.*, f.name AS farmer_name, f.balance AS farmer_balance, f.id AS f_id,
+        COALESCE((SELECT quantity FROM booking_bags WHERE booking_id = b.id LIMIT 1), 0) AS bag_qty,
+        COALESCE((SELECT ownership FROM booking_bags WHERE booking_id = b.id LIMIT 1), 'company') AS bag_ownership,
+        COALESCE((SELECT bag_rate FROM booking_bags WHERE booking_id = b.id LIMIT 1), 0) AS bag_rate
         FROM bookings b JOIN farmers f ON b.farmer_id = f.id WHERE b.id = $booking_id")->fetch_assoc();
     $farmer_id = $booking['f_id'];
 }
@@ -56,7 +59,10 @@ $total_paid = 0;
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-money-bill-wave mr-1"></i> Farmer Payment</h1>
-    <a href="list.php" class="btn btn-sm btn-secondary"><i class="fas fa-arrow-left mr-1"></i> Booking List</a>
+    <div>
+        <a href="list.php" class="btn btn-sm btn-secondary"><i class="fas fa-arrow-left mr-1"></i> Booking List</a>
+        <button class="btn btn-sm btn-primary ml-1" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+    </div>
 </div>
 
 <?= flashMessage() ?>
@@ -75,12 +81,16 @@ $total_paid = 0;
                 <strong><?= qty($booking['booked_qty']) ?> KG</strong>
             </div>
             <div class="col-md-2">
-                <small class="text-muted d-block">Rate / KG</small>
+                <small class="text-muted d-block">Rate / Man</small>
                 <strong>Rs <?= money($booking['rate']) ?></strong>
             </div>
             <div class="col-md-2">
-                <small class="text-muted d-block">Total Value</small>
-                <strong>Rs <?= money($booking['booked_qty'] * $booking['rate']) ?></strong>
+                <small class="text-muted d-block">Wheat Value</small>
+                <strong>Rs <?= money(($booking['bag_qty'] * 50 / 40) * $booking['rate']) ?></strong>
+            </div>
+            <div class="col-md-2">
+                <small class="text-muted d-block">Grand Total</small>
+                <strong>Rs <?= money(($booking['bag_qty'] * 50 / 40) * $booking['rate'] + ($booking['bag_ownership'] === 'farmer' ? $booking['bag_qty'] * $booking['bag_rate'] : 0)) ?></strong>
             </div>
             <div class="col-md-3">
                 <small class="text-muted d-block">Farmer Balance</small>

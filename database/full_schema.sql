@@ -3,6 +3,7 @@
 
 CREATE DATABASE IF NOT EXISTS flour_mill CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE flour_mill;
+SET FOREIGN_KEY_CHECKS = 0;
 
 -- ============================================================
 -- 1. USERS
@@ -27,6 +28,20 @@ CREATE TABLE IF NOT EXISTS farmers (
     city        VARCHAR(100),
     balance     DECIMAL(12,2) DEFAULT 0.00,
     status      ENUM('active','inactive') DEFAULT 'active',
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- ============================================================
+-- WAREHOUSES (must be before bag_stock, warehouse_stock, etc.)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS warehouses (
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    code            VARCHAR(20) NOT NULL,
+    name            VARCHAR(150) NOT NULL,
+    location        VARCHAR(200),
+    capacity_kg     DECIMAL(12,2) DEFAULT 0,
+    type            ENUM('wheat','mill','finished','general') DEFAULT 'general',
+    status          ENUM('active','inactive') DEFAULT 'active',
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
@@ -249,6 +264,7 @@ CREATE TABLE IF NOT EXISTS wheat_arrivals (
     transport_charges DECIMAL(12,2) DEFAULT 0,
     other_charges   DECIMAL(12,2) DEFAULT 0,
     net_amount      DECIMAL(12,2) DEFAULT 0,
+    payment_now     DECIMAL(12,2) DEFAULT 0,
     quality_grade   VARCHAR(50),
     broker_id       INT DEFAULT NULL,
     notes           TEXT,
@@ -510,6 +526,7 @@ INSERT INTO users (username, password, name, role) VALUES
 
 -- Default Products (Flour Mill)
 INSERT INTO products (name, category, unit, sale_price) VALUES
+('Wheat (Gandam)', 'Raw Material', 'KG', 0),
 ('Atta (Whole Wheat)', 'Flour', 'KG', 45.00),
 ('Maida (White Flour)', 'Flour', 'KG', 50.00),
 ('Suji (Semolina)', 'Flour', 'KG', 55.00),
@@ -560,7 +577,7 @@ INSERT INTO bank_accounts (account_name, bank_name, account_no) VALUES
 ('HBL Current Account', 'Habib Bank Ltd', 'HBL-1234-5678');
 
 -- ============================================================
--- 22. VEHICLES (Master)
+-- MASTER TABLES (vehicles, drivers, bag_types, brokers — moved here for FK ordering)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS vehicles (
     id              INT AUTO_INCREMENT PRIMARY KEY,
@@ -574,9 +591,6 @@ CREATE TABLE IF NOT EXISTS vehicles (
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- ============================================================
--- 23. DRIVERS (Master)
--- ============================================================
 CREATE TABLE IF NOT EXISTS drivers (
     id              INT AUTO_INCREMENT PRIMARY KEY,
     name            VARCHAR(150) NOT NULL,
@@ -588,9 +602,6 @@ CREATE TABLE IF NOT EXISTS drivers (
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- ============================================================
--- 24. BAG TYPES (Master)
--- ============================================================
 CREATE TABLE IF NOT EXISTS bag_types (
     id              INT AUTO_INCREMENT PRIMARY KEY,
     name            VARCHAR(100) NOT NULL,
@@ -601,9 +612,9 @@ CREATE TABLE IF NOT EXISTS bag_types (
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- ============================================================
--- 25. BROKERS (Master)
--- ============================================================
+INSERT INTO bag_types (name, bag_weight_kg, empty_bag_cost, rate_per_bag, status) VALUES
+('Standard Bag', 50, 0, 0, 'active');
+
 CREATE TABLE IF NOT EXISTS brokers (
     id              INT AUTO_INCREMENT PRIMARY KEY,
     name            VARCHAR(150) NOT NULL,
@@ -614,16 +625,5 @@ CREATE TABLE IF NOT EXISTS brokers (
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- ============================================================
--- 26. WAREHOUSES (Master)
--- ============================================================
-CREATE TABLE IF NOT EXISTS warehouses (
-    id              INT AUTO_INCREMENT PRIMARY KEY,
-    code            VARCHAR(20) NOT NULL,
-    name            VARCHAR(150) NOT NULL,
-    location        VARCHAR(200),
-    capacity_kg     DECIMAL(12,2) DEFAULT 0,
-    type            ENUM('wheat','mill','finished','general') DEFAULT 'general',
-    status          ENUM('active','inactive') DEFAULT 'active',
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+-- WAREHOUSES moved before bag_stock to satisfy FK constraints
+SET FOREIGN_KEY_CHECKS = 1;

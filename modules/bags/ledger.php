@@ -42,6 +42,7 @@ $type_labels = [
         <a href="add_in.php" class="btn btn-success btn-sm"><i class="fas fa-arrow-down mr-1"></i> Bags IN</a>
         <a href="add_out.php" class="btn btn-warning btn-sm text-white"><i class="fas fa-arrow-up mr-1"></i> Bags OUT</a>
         <a href="adjust.php" class="btn btn-info btn-sm"><i class="fas fa-sliders-h mr-1"></i> Adjust</a>
+        <a href="print_ledger.php" class="btn btn-sm btn-info ml-1" target="_blank"><i class="fas fa-print mr-1"></i> Print</a>
     </div>
 </div>
 
@@ -98,6 +99,7 @@ $total_bags = $conn->query("SELECT COALESCE(SUM(qty),0) as t FROM bag_stock")->f
                         <th class="text-right">Quantity</th>
                         <th>Type</th>
                         <th>Notes</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -110,6 +112,7 @@ $total_bags = $conn->query("SELECT COALESCE(SUM(qty),0) as t FROM bag_stock")->f
                         <td class="text-right font-weight-bold"><?= number_format($row['balance_qty']) ?></td>
                         <td><?= $type_labels[$row['type']] ?? $row['type'] ?></td>
                         <td><small><?= htmlspecialchars($row['notes'] ?? '') ?></small></td>
+                        <td><a href="print_slip.php?id=<?= $row['id'] ?>" target="_blank" class="btn btn-sm btn-info"><i class="fas fa-print"></i></a></td>
                     </tr>
                     <?php endwhile; ?>
                 </tbody>

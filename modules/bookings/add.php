@@ -16,12 +16,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $expected_date  = $_POST['expected_date'] ?: null;
     $advance_amount = str_replace(',', '', $_POST['advance_amount']);
     $notes          = sanitize($_POST['notes']);
+    $delivery_type  = $_POST['delivery_type'] ?? 'pickup';
 
     $bag_qty        = (int)str_replace(',', '', $_POST['bag_qty']);
     $bag_capacity   = 50;
     $ownership      = $_POST['ownership'] ?? 'company';
+    $bag_action     = $_POST['bag_action'] ?? 'return';
     $bag_rate       = str_replace(',', '', $_POST['bag_rate'] ?? 0);
-    $bag_warehouse_id = !empty($_POST['bag_warehouse_id']) ? (int)$_POST['bag_warehouse_id'] : null;
 
     // Auto-select first active bag type
     $bt_row = $conn->query("SELECT id FROM bag_types WHERE status='active' LIMIT 1")->fetch_assoc();
@@ -33,40 +34,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($farmer_id <= 0) { $error = "Please select a valid farmer."; }
     if ($bag_type_id <= 0 || $bag_qty <= 0) { $error = "Please select bag type and enter quantity."; }
+    if ($ownership === 'farmer' && $bag_action === 'purchase' && $bag_rate <= 0) { $error = "Please enter bag purchase rate."; }
 
     if (!$error) {
         $farmer_wheat   = $bag_qty * $bag_capacity;
         $katt_total     = $bag_qty * $katt_per_bag;
-        $booked_qty     = $farmer_wheat + $katt_total;
+        // booked_qty stores only wheat (bag_qty × 50); katt shown separately on listing/view pages
+        $booked_qty     = $farmer_wheat;
         $mans           = $farmer_wheat / 40;
 
         $conn->begin_transaction();
         try {
             $booking_no = generateBookingNo();
-            $stmt = $conn->prepare("INSERT INTO bookings (booking_no, farmer_id, date, booked_qty, rate, advance_amount, moisture_percent, katt_per_bag, expected_date, notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-            $stmt->bind_param("sisddddsss", $booking_no, $farmer_id, $date, $booked_qty, $rate_per_man, $advance_amount, $moisture, $katt_per_bag, $expected_date, $notes);
+            $stmt = $conn->prepare("INSERT INTO bookings (booking_no, farmer_id, date, booked_qty, rate, advance_amount, moisture_percent, katt_per_bag, expected_date, notes, delivery_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+            $stmt->bind_param("sisddddssss", $booking_no, $farmer_id, $date, $booked_qty, $rate_per_man, $advance_amount, $moisture, $katt_per_bag, $expected_date, $notes, $delivery_type);
             $stmt->execute();
             $booking_id = $conn->insert_id;
 
-            $stmt2 = $conn->prepare("INSERT INTO booking_bags (booking_id, bag_type_id, quantity, bag_capacity_kg, ownership, bag_rate, bag_warehouse_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt2->bind_param("iiidsdi", $booking_id, $bag_type_id, $bag_qty, $bag_capacity, $ownership, $bag_rate, $bag_warehouse_id);
+            $stmt2 = $conn->prepare("INSERT INTO booking_bags (booking_id, bag_type_id, quantity, bag_capacity_kg, ownership, bag_action, bag_rate) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt2->bind_param("iiidsds", $booking_id, $bag_type_id, $bag_qty, $bag_capacity, $ownership, $bag_action, $bag_rate);
             $stmt2->execute();
-
-            // Deduct company bags from stock
-            if ($ownership === 'company' && $bag_warehouse_id > 0 && $bag_qty > 0) {
-                $conn->query("UPDATE bag_stock SET qty = GREATEST(qty - $bag_qty, 0) WHERE warehouse_id = $bag_warehouse_id");
-                $bal = $conn->query("SELECT qty FROM bag_stock WHERE warehouse_id=$bag_warehouse_id")->fetch_assoc();
-                $bal_qty = $bal ? $bal['qty'] : 0;
-                $conn->query("INSERT INTO bag_stock_ledger (date, warehouse_id, qty_in, qty_out, balance_qty, type, reference_id, notes)
-                    VALUES ('$date', $bag_warehouse_id, 0, $bag_qty, $bal_qty, 'booking_out', $booking_id, 'Booking $booking_no - Company bags sent to farmer')");
-            }
 
             if ($advance_amount > 0) {
                 $farmer_name = $conn->query("SELECT name FROM farmers WHERE id=$farmer_id")->fetch_row()[0];
                 $conn->query("INSERT INTO farmer_payments (farmer_id, date, amount, type, payment_mode, booking_id, notes)
                     VALUES ($farmer_id, '$date', $advance_amount, 'advance', 'cash', $booking_id, 'Advance against $booking_no')");
-                $conn->query("UPDATE farmers SET balance = balance + $advance_amount WHERE id = $farmer_id");
+                $conn->query("UPDATE farmers SET balance = balance - $advance_amount WHERE id = $farmer_id");
 
                 $desc = "Advance payment to farmer - $farmer_name (Booking #$booking_no)";
                 autoJournalEntry($date, $desc, [17 => $advance_amount], [2 => $advance_amount], $_SESSION['user_id']);
@@ -94,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="card-body">
         <form method="POST">
             <div class="row">
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="form-group has-search">
                         <label>Farmer <span class="text-danger">*</span></label>
                         <input type="text" id="farmerSearch" class="form-control" placeholder="Search farmer..." autocomplete="off" required>
@@ -103,16 +97,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <small><a href="#" data-toggle="modal" data-target="#newFarmerModal">+ Add New Farmer</a></small>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="form-group">
                         <label>Date <span class="text-danger">*</span></label>
                         <input type="date" name="date" class="form-control" value="<?= date('Y-m-d') ?>" required>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="form-group">
                         <label>Expected Delivery Date</label>
                         <input type="date" name="expected_date" class="form-control">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Delivery Type <span class="text-danger">*</span></label><br>
+                        <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                            <label class="btn btn-outline-primary btn-sm active">
+                                <input type="radio" name="delivery_type" value="pickup" checked> Farmer Sends
+                            </label>
+                            <label class="btn btn-outline-primary btn-sm">
+                                <input type="radio" name="delivery_type" value="delivery"> We Pickup
+                            </label>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -152,25 +159,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     </div>
                 </div>
             </div>
-            <div class="row" id="bagRateRow" style="display:none;">
-                <div class="col-md-3">
+            <div class="row" id="bagActionRow" style="display:none;">
+                <div class="col-md-4">
                     <div class="form-group">
-                        <label>Bag Rate (per bag)</label>
-                        <input type="text" name="bag_rate" class="form-control" placeholder="0.00">
+                        <label>Bag Action <span class="text-danger">*</span></label><br>
+                        <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                            <label class="btn btn-outline-success btn-sm active">
+                                <input type="radio" name="bag_action" value="return" checked> Return After Use
+                            </label>
+                            <label class="btn btn-outline-warning btn-sm">
+                                <input type="radio" name="bag_action" value="purchase"> Purchase from Farmer
+                            </label>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="row" id="bagWarehouseRow">
+            <div class="row" id="bagRateRow" style="display:none;">
                 <div class="col-md-3">
                     <div class="form-group">
-                        <label>Bag Warehouse <small class="text-muted">(stock from)</small></label>
-                        <select name="bag_warehouse_id" id="bagWarehouseId" class="form-control">
-                            <option value="">Select</option>
-                            <?php while ($w = $warehouses->fetch_assoc()): ?>
-                            <option value="<?= $w['id'] ?>"><?= htmlspecialchars($w['name']) ?></option>
-                            <?php endwhile; ?>
-                        </select>
-                        <small class="text-muted" id="bagStockInfo"></small>
+                        <label>Bag Purchase Rate (per bag) <span class="text-danger">*</span></label>
+                        <input type="text" name="bag_rate" class="form-control" placeholder="0.00">
                     </div>
                 </div>
             </div>
@@ -218,7 +226,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="row">
                 <div class="col-md-3">
                     <div class="form-group">
-                        <label>Total Estimated Value</label>
+                        <label>Wheat Value</label>
+                        <input type="text" id="wheatValue" class="form-control" placeholder="0.00" readonly style="background:#f5f5f5">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Grand Total</label>
                         <input type="text" id="estimatedValue" class="form-control" placeholder="0.00" readonly style="background:#f5f5f5">
                     </div>
                 </div>
@@ -228,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <input type="text" name="advance_amount" class="form-control" placeholder="0.00">
                     </div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-3">
                     <div class="form-group">
                         <label>Notes</label>
                         <textarea name="notes" class="form-control" rows="2"></textarea>
@@ -296,25 +310,27 @@ $('form').on('submit', function() {
 // === Bag Ownership Toggle ===
 $('input[name="ownership"]').on('change', function() {
     if ($(this).val() === 'farmer') {
-        $('#bagRateRow').slideDown();
-        $('#bagWarehouseRow').slideUp();
-    } else {
+        $('#bagActionRow').slideDown();
+        // Reset to default action
+        $('input[name="bag_action"][value="return"]').prop('checked', true).parent().addClass('active').siblings().removeClass('active');
         $('#bagRateRow').slideUp();
         $('input[name="bag_rate"]').val('');
-        $('#bagWarehouseRow').slideDown();
+    } else {
+        $('#bagActionRow').slideUp();
+        $('#bagRateRow').slideUp();
+        $('input[name="bag_rate"]').val('');
     }
 });
 
-// === Check bag stock on warehouse change ===
-$('#bagWarehouseId').on('change', function() {
-    var bt = $('select[name="bag_type_id"]').val();
-    var wh = $(this).val();
-    var qty = $('#bagQty').val() || 0;
-    if (bt && wh) {
-        $.get('../bags/get_bag_stock.php', { bag_type_id: bt, warehouse_id: wh }, function(d) {
-            $('#bagStockInfo').text('Available: ' + d.qty + ' bags');
-        });
+// === Bag Action Toggle (Return vs Purchase) ===
+$('input[name="bag_action"]').on('change', function() {
+    if ($(this).val() === 'purchase') {
+        $('#bagRateRow').slideDown();
+    } else {
+        $('#bagRateRow').slideUp();
+        $('input[name="bag_rate"]').val('');
     }
+    calcBooking();
 });
 
 // === Auto Calculations ===
@@ -322,17 +338,27 @@ function calcBooking() {
     var bagQty = parseFloat($('#bagQty').val()) || 0;
     var katt = parseFloat($('#kattPerBag').val()) || 0;
     var rate = parseFloat($('#ratePerMan').val().replace(/,/g, '')) || 0;
+    var bagRate = parseFloat($('input[name="bag_rate"]').val().replace(/,/g, '')) || 0;
+    var bagAction = $('input[name="bag_action"]:checked').val();
+    var ownership = $('input[name="ownership"]:checked').val();
 
     var farmerWheat = bagQty * 50;
     var kattTotal = bagQty * katt;
     var netQty = farmerWheat + kattTotal;
     var mans = farmerWheat / 40;
-    var totalValue = mans * rate;
+    var wheatValue = mans * rate;
+
+    var bagPurchaseCost = 0;
+    if (ownership === 'farmer' && bagAction === 'purchase' && bagRate > 0) {
+        bagPurchaseCost = bagQty * bagRate;
+    }
+    var totalValue = wheatValue + bagPurchaseCost;
 
     $('#farmerWheat').val(farmerWheat.toFixed(3));
     $('#kattTotal').val(kattTotal.toFixed(3));
     $('#netQty').val(netQty.toFixed(3));
     $('#mans').val(mans.toFixed(3));
+    $('#wheatValue').val(wheatValue.toFixed(2));
 
     if (totalValue > 0) {
         $('#estimatedValue').val(totalValue.toFixed(2));
@@ -341,7 +367,8 @@ function calcBooking() {
     }
 }
 
-$('#bagQty, #kattPerBag, #ratePerMan').on('input', calcBooking);
+$('#bagQty, #kattPerBag, #ratePerMan, input[name="bag_rate"]').on('input', calcBooking);
+$('input[name="bag_action"]').on('change', calcBooking);
 
 // === Farmer Search Autocomplete ===
 var searchTimer;

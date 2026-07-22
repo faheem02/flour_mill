@@ -30,6 +30,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $transport_charges = str_replace(',', '', $_POST['transport_charges']);
     $other_charges  = str_replace(',', '', $_POST['other_charges']);
     $net_amount     = str_replace(',', '', $_POST['net_amount']);
+    $payment_now    = str_replace(',', '', $_POST['payment_now'] ?? '0');
+    $payment_now    = max(0, (float)$payment_now);
     $notes          = sanitize($_POST['notes']);
 
     $bag_weight     = 0;
@@ -38,43 +40,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bag_weight = $bt ? $bt['bag_weight_kg'] : 0;
     }
 
+    // Physical weight that entered the warehouse: weighbridge actual, fallback to net_weight
+    $stock_weight = ($actual_weight > 0) ? (float)$actual_weight : (float)$net_weight;
+
     $conn->begin_transaction();
     try {
-        $stmt = $conn->prepare("INSERT INTO wheat_arrivals (booking_id, date, vehicle_no, warehouse_id, bag_type_id, num_bags, gross_weight, bag_weight, net_weight, actual_weight, weight_slip_no, weight_diff, katt_applied, moisture_pct, gross_amount, bag_amount, labour_charges, transport_charges, other_charges, net_amount, driver_id, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("issiiiddddsddddddddiis", $booking_id, $date, $vehicle_no, $warehouse_id, $bag_type_id, $num_bags, $wheat_kg, $bag_weight, $net_weight, $actual_weight, $weight_slip_no, $weight_diff, $katt_applied, $moisture_pct, $gross_amount, $bag_amount, $labour_charges, $transport_charges, $other_charges, $net_amount, $driver_id, $notes);
+        $stmt = $conn->prepare("INSERT INTO wheat_arrivals (booking_id, date, vehicle_no, warehouse_id, bag_type_id, num_bags, gross_weight, bag_weight, net_weight, actual_weight, weight_slip_no, weight_diff, katt_applied, moisture_pct, gross_amount, bag_amount, labour_charges, transport_charges, other_charges, net_amount, payment_now, driver_id, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("issiiiddddsddddddddddis", $booking_id, $date, $vehicle_no, $warehouse_id, $bag_type_id, $num_bags, $wheat_kg, $bag_weight, $net_weight, $actual_weight, $weight_slip_no, $weight_diff, $katt_applied, $moisture_pct, $gross_amount, $bag_amount, $labour_charges, $transport_charges, $other_charges, $net_amount, $payment_now, $driver_id, $notes);
         $stmt->execute();
         $arrival_id = $conn->insert_id;
 
-        // Stock: use net_weight (wheat + katt) for warehouse
-        if ($warehouse_id > 0 && $net_weight > 0) {
+        // Warehouse stock uses actual (physical) weight — includes wheat + katt that physically came
+        if ($warehouse_id > 0 && $stock_weight > 0) {
             $wheat = $conn->query("SELECT id FROM products WHERE name = 'Wheat (Gandam)' LIMIT 1");
             if ($wheat_row = $wheat->fetch_assoc()) {
                 $product_id = $wheat_row['id'];
                 $conn->query("INSERT INTO warehouse_stock (warehouse_id, product_id, stock_qty)
-                    VALUES ($warehouse_id, $product_id, $net_weight)
-                    ON DUPLICATE KEY UPDATE stock_qty = stock_qty + $net_weight");
+                    VALUES ($warehouse_id, $product_id, $stock_weight)
+                    ON DUPLICATE KEY UPDATE stock_qty = stock_qty + $stock_weight");
+                $conn->query("UPDATE products SET stock_qty = stock_qty + $stock_weight WHERE id = $product_id");
                 $conn->query("INSERT INTO stock_ledger (product_id, warehouse_id, type, reference_id, date, qty_in, qty_out, balance_qty, notes)
-                    VALUES ($product_id, $warehouse_id, 'arrival', $arrival_id, '$date', $net_weight, 0, 0, 'Wheat arrival - $vehicle_no')");
+                    VALUES ($product_id, $warehouse_id, 'arrival', $arrival_id, '$date', $stock_weight, 0, 0, 'Wheat arrival - $vehicle_no')");
             }
         }
 
-        // Update booking received_qty
-        if ($booking_id > 0 && $net_weight > 0) {
-            $conn->query("UPDATE bookings SET received_qty = received_qty + $net_weight WHERE id = $booking_id");
+        // Booking received_qty tracks only WHEAT (bags x 50), apples-to-apples vs booked_qty
+        if ($booking_id > 0 && $wheat_kg > 0) {
+            $conn->query("UPDATE bookings SET received_qty = received_qty + $wheat_kg WHERE id = $booking_id");
             $conn->query("UPDATE bookings SET status = 'partial' WHERE id = $booking_id AND received_qty > 0 AND received_qty < booked_qty AND status != 'completed'");
             $conn->query("UPDATE bookings SET status = 'completed' WHERE id = $booking_id AND received_qty >= booked_qty");
         }
 
-        // Farmer ledger entry for net amount
+        // Farmer ledger: net amount increases balance (we owe farmer for wheat)
         if ($booking_id > 0 && $net_amount > 0) {
             $bk = $conn->query("SELECT farmer_id, booking_no FROM bookings WHERE id = $booking_id")->fetch_assoc();
             if ($bk) {
                 $farmer_id = $bk['farmer_id'];
                 $booking_no = $bk['booking_no'];
-                $conn->query("INSERT INTO farmer_payments (farmer_id, date, amount, type, payment_mode, booking_id, notes)
-                    VALUES ($farmer_id, '$date', $net_amount, 'payment', 'cash', $booking_id, 'Arrival payment - Net Amount for $booking_no')");
                 $conn->query("UPDATE farmers SET balance = balance + $net_amount WHERE id = $farmer_id");
+
+                // If payment made now, record it and deduct from balance
+                if ($payment_now > 0) {
+                    $conn->query("INSERT INTO farmer_payments (farmer_id, date, amount, type, payment_mode, booking_id, notes)
+                        VALUES ($farmer_id, '$date', $payment_now, 'payment', 'cash', $booking_id, 'Payment on arrival - $booking_no')");
+                    $conn->query("UPDATE farmers SET balance = balance - $payment_now WHERE id = $farmer_id");
+
+                    // Auto journal entry for payment
+                    $farmer_name = $conn->query("SELECT name FROM farmers WHERE id = $farmer_id")->fetch_row()[0];
+                    autoJournalEntry($date, "Payment to farmer on arrival - $farmer_name ($booking_no)", [17 => $payment_now], [2 => $payment_now], $_SESSION['user_id']);
+                }
             }
         }
 
@@ -98,7 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $conn->commit();
-        $_SESSION['flash'] = "Arrival recorded. Net Weight: " . qty($net_weight) . " KG";
+        $_SESSION['flash'] = "Arrival recorded. Stock Weight: " . qty($stock_weight) . " KG (Wheat: " . qty($wheat_kg) . " + Katt: " . qty($katt_applied) . ")";
         header("Location: list.php");
         exit;
     } catch (Exception $e) {
@@ -343,6 +358,12 @@ if ($wh_stock && $wh_stock->num_rows > 0) {
                         <input type="hidden" name="net_amount" id="netAmountHidden">
                     </div>
                 </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label>Payment Now (optional)</label>
+                        <input type="text" name="payment_now" class="form-control" placeholder="0.00">
+                    </div>
+                </div>
             </div>
 
             <!-- ROW 6: Notes -->
@@ -438,20 +459,21 @@ function calcAuto() {
 
     // Re-calc financial
     calcActual();
-    calcGrossAmount(net);
+    calcGrossAmount(wheat);
 }
 
 // === Actual Weight → Diff ===
 function calcActual() {
-    var net = parseFloat($('#netWeightDisplay').val()) || 0;
+    var wheat  = parseFloat($('#wheatKgHidden').val()) || 0;
+    var net    = parseFloat($('#netWeightDisplay').val()) || 0;
     var actual = parseFloat($('#actualWeight').val()) || 0;
     var diff = actual - net;
     $('#weightDiff').val(diff.toFixed(3));
     $('#weightDiffHidden').val(diff.toFixed(3));
 
-    // Use actual weight for gross if provided
-    var weight = actual > 0 ? actual : net;
-    calcGrossAmount(weight);
+    // Pricing: min(wheat, actual) agar actual enter hua, warna sirf wheat
+    var priceWeight = (actual > 0) ? Math.min(wheat, actual) : wheat;
+    calcGrossAmount(priceWeight);
 }
 
 // === Gross Amount = (Weight KG ÷ 40) × Rate ===

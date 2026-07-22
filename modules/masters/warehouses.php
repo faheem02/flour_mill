@@ -14,14 +14,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $code = sanitize($_POST['code']);
     $name = sanitize($_POST['name']);
     $location = sanitize($_POST['location']);
-    $capacity_kg = str_replace(',', '', $_POST['capacity_kg']);
     $type = sanitize($_POST['type']);
 
     if ($id) {
-        $conn->query("UPDATE warehouses SET code='$code', name='$name', location='$location', capacity_kg='$capacity_kg', type='$type' WHERE id=$id");
+        $conn->query("UPDATE warehouses SET code='$code', name='$name', location='$location', type='$type' WHERE id=$id");
         setFlash("Warehouse updated.");
     } else {
-        $conn->query("INSERT INTO warehouses (code, name, location, capacity_kg, type) VALUES ('$code', '$name', '$location', '$capacity_kg', '$type')");
+        $conn->query("INSERT INTO warehouses (code, name, location, type) VALUES ('$code', '$name', '$location', '$type')");
         setFlash("Warehouse added.");
     }
     header("Location: warehouses.php");
@@ -55,7 +54,6 @@ include '../../includes/header.php';
                         <th>Code</th>
                         <th>Name</th>
                         <th>Location</th>
-                        <th class="text-right">Capacity (KG)</th>
                         <th>Type</th>
                         <th>Actions</th>
                     </tr>
@@ -67,11 +65,10 @@ include '../../includes/header.php';
                         <td><?= htmlspecialchars($row['code']) ?></td>
                         <td><?= htmlspecialchars($row['name']) ?></td>
                         <td><?= htmlspecialchars($row['location']) ?></td>
-                        <td class="text-right"><?= qty($row['capacity_kg']) ?></td>
                         <td><span class="badge badge-info"><?= ucfirst($row['type']) ?></span></td>
                         <td>
                             <a href="warehouse_view.php?id=<?= $row['id'] ?>" class="btn btn-sm btn-info" title="View Stock & Arrivals"><i class="fas fa-eye"></i></a>
-                            <a href="#" class="btn btn-sm btn-warning" title="Edit" onclick="editWarehouse(<?= $row['id'] ?>, '<?= htmlspecialchars(addslashes($row['code'])) ?>', '<?= htmlspecialchars(addslashes($row['name'])) ?>', '<?= htmlspecialchars(addslashes($row['location'])) ?>', '<?= $row['capacity_kg'] ?>', '<?= $row['type'] ?>')"><i class="fas fa-edit"></i></a>
+                            <a href="#" class="btn btn-sm btn-warning" title="Edit" onclick="editWarehouse(<?= $row['id'] ?>, '<?= htmlspecialchars(addslashes($row['code'])) ?>', '<?= htmlspecialchars(addslashes($row['name'])) ?>', '<?= htmlspecialchars(addslashes($row['location'])) ?>', '<?= $row['type'] ?>')"><i class="fas fa-edit"></i></a>
                             <a href="warehouse_delete.php?id=<?= $row['id'] ?>" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete this warehouse?')"><i class="fas fa-trash"></i></a>
                         </td>
                     </tr>
@@ -106,10 +103,6 @@ include '../../includes/header.php';
                         <input type="text" name="location" id="whLocation" class="form-control">
                     </div>
                     <div class="form-group">
-                        <label>Capacity (KG)</label>
-                        <input type="text" name="capacity_kg" id="whCapacity" class="form-control" placeholder="0">
-                    </div>
-                    <div class="form-group">
                         <label>Type</label>
                         <select name="type" id="whType" class="form-control">
                             <option value="wheat">Wheat Storage</option>
@@ -129,12 +122,11 @@ include '../../includes/header.php';
 </div>
 
 <script>
-function editWarehouse(id, code, name, location, capacity, type) {
+function editWarehouse(id, code, name, location, type) {
     $('#warehouseId').val(id);
     $('#whCode').val(code);
     $('#whName').val(name);
     $('#whLocation').val(location);
-    $('#whCapacity').val(capacity);
     $('#whType').val(type);
     $('#modalTitle').text('Edit Warehouse');
     $('#warehouseModal').modal('show');
@@ -145,7 +137,6 @@ $('#warehouseModal').on('hidden.bs.modal', function () {
     $('#whCode').val('');
     $('#whName').val('');
     $('#whLocation').val('');
-    $('#whCapacity').val('');
     $('#whType').val('wheat');
     $('#modalTitle').text('Add Warehouse');
 });

@@ -22,7 +22,10 @@ $result = $pid > 0
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-book mr-1"></i> Stock Ledger</h1>
-    <a href="adjustment.php" class="btn btn-sm btn-warning"><i class="fas fa-sliders-h mr-1"></i> Adjustment</a>
+    <div>
+        <a href="adjustment.php" class="btn btn-sm btn-warning"><i class="fas fa-sliders-h mr-1"></i> Adjustment</a>
+        <a href="print_ledger.php<?= $pid ? '?product_id='.$pid : '' ?>" class="btn btn-sm btn-info ml-1" target="_blank"><i class="fas fa-print mr-1"></i> Print</a>
+    </div>
 </div>
 
 <div class="card shadow mb-4">

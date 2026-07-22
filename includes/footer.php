@@ -56,8 +56,27 @@
 
         $('.datatable').each(function() {
             if (!$.fn.dataTable.isDataTable(this)) {
-                $(this).DataTable({ pageLength: 25, order: [[0, 'desc']] });
+                $(this).DataTable({ pageLength: 25, order: [[0, 'desc']], lengthChange: false });
             }
+        });
+
+        // Before print: expand all DataTables to show ALL rows
+        window.addEventListener('beforeprint', function() {
+            $('.datatable').each(function() {
+                if ($.fn.dataTable.isDataTable(this)) {
+                    var dt = $(this).DataTable();
+                    dt.page.len(-1).draw();
+                }
+            });
+        });
+        // After print: restore pagination
+        window.addEventListener('afterprint', function() {
+            $('.datatable').each(function() {
+                if ($.fn.dataTable.isDataTable(this)) {
+                    var dt = $(this).DataTable();
+                    dt.page.len(25).draw('page');
+                }
+            });
         });
 
         $('.alert-auto').delay(5000).fadeOut('slow');

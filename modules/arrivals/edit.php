@@ -39,28 +39,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bag_weight = $bt ? $bt['bag_weight_kg'] : 0;
     }
 
-    $old_net = $arrival['net_weight'];
-    $old_wh  = $arrival['warehouse_id'];
+    $wheat_kg      = $num_bags * 50;
+    $stock_weight  = ($actual_weight > 0) ? (float)$actual_weight : (float)$net_weight;
+    $old_stock     = ($arrival['actual_weight'] > 0) ? (float)$arrival['actual_weight'] : (float)$arrival['net_weight'];
+    $old_wheat     = (float)$arrival['gross_weight'];
+    $old_wh        = $arrival['warehouse_id'];
+    $booking_id    = (int)$arrival['booking_id'];
 
     $conn->begin_transaction();
     try {
         $stmt = $conn->prepare("UPDATE wheat_arrivals SET date=?, vehicle_no=?, warehouse_id=?, bag_type_id=?, num_bags=?, gross_weight=?, bag_weight=?, net_weight=?, actual_weight=?, weight_slip_no=?, weight_diff=?, katt_applied=?, moisture_pct=?, gross_amount=?, bag_amount=?, labour_charges=?, transport_charges=?, other_charges=?, net_amount=?, driver_id=?, notes=? WHERE id=?");
-        $stmt->bind_param("ssiiidddsdddddddddisi", $date, $vehicle_no, $warehouse_id, $bag_type_id, $num_bags, $actual_weight, $bag_weight, $net_weight, $actual_weight, $weight_slip_no, $weight_diff, $katt_applied, $moisture_pct, $gross_amount, $bag_amount, $labour_charges, $transport_charges, $other_charges, $net_amount, $driver_id, $notes, $id);
+        $stmt->bind_param("ssiiidddsdddddddddisi", $date, $vehicle_no, $warehouse_id, $bag_type_id, $num_bags, $wheat_kg, $bag_weight, $net_weight, $actual_weight, $weight_slip_no, $weight_diff, $katt_applied, $moisture_pct, $gross_amount, $bag_amount, $labour_charges, $transport_charges, $other_charges, $net_amount, $driver_id, $notes, $id);
         $stmt->execute();
 
-        // Adjust warehouse stock
+        // Adjust warehouse stock (revert old, add new actual/net weight)
         $wheat = $conn->query("SELECT id FROM products WHERE name = 'Wheat (Gandam)' LIMIT 1")->fetch_assoc();
         if ($wheat) {
             $pid = $wheat['id'];
-            if ($old_wh > 0 && $old_net > 0) {
-                $conn->query("UPDATE warehouse_stock SET stock_qty = GREATEST(stock_qty - $old_net, 0) WHERE warehouse_id = $old_wh AND product_id = $pid");
+            if ($old_wh > 0 && $old_stock > 0) {
+                $conn->query("UPDATE warehouse_stock SET stock_qty = GREATEST(stock_qty - $old_stock, 0) WHERE warehouse_id = $old_wh AND product_id = $pid");
+                $conn->query("UPDATE products SET stock_qty = GREATEST(stock_qty - $old_stock, 0) WHERE id = $pid");
             }
-            if ($warehouse_id > 0 && $net_weight > 0) {
-                $conn->query("INSERT INTO warehouse_stock (warehouse_id, product_id, stock_qty) VALUES ($warehouse_id, $pid, $net_weight)
-                    ON DUPLICATE KEY UPDATE stock_qty = stock_qty + $net_weight");
+            // Delete previous 'arrival' ledger rows for this reference, re-post correct qty
+            $conn->query("DELETE FROM stock_ledger WHERE product_id = $pid AND type = 'arrival' AND reference_id = $id");
+            if ($warehouse_id > 0 && $stock_weight > 0) {
+                $conn->query("INSERT INTO warehouse_stock (warehouse_id, product_id, stock_qty) VALUES ($warehouse_id, $pid, $stock_weight)
+                    ON DUPLICATE KEY UPDATE stock_qty = stock_qty + $stock_weight");
+                $conn->query("UPDATE products SET stock_qty = stock_qty + $stock_weight WHERE id = $pid");
+                $conn->query("INSERT INTO stock_ledger (product_id, warehouse_id, type, reference_id, date, qty_in, qty_out, balance_qty, notes)
+                    VALUES ($pid, $warehouse_id, 'arrival', $id, '$date', $stock_weight, 0, 0, 'Arrival #$id edited')");
             }
-            $conn->query("INSERT INTO stock_ledger (product_id, warehouse_id, type, reference_id, date, qty_in, qty_out, balance_qty, notes)
-                VALUES ($pid, $warehouse_id, 'arrival', $id, '$date', $net_weight, 0, 0, 'Arrival #$id edited')");
+        }
+
+        // Adjust booking received_qty by delta of wheat (gross_weight), keep apples-to-apples with booked_qty
+        if ($booking_id > 0) {
+            $delta_wheat = $wheat_kg - $old_wheat;
+            if ($delta_wheat != 0) {
+                $conn->query("UPDATE bookings SET received_qty = GREATEST(received_qty + $delta_wheat, 0) WHERE id = $booking_id");
+                $conn->query("UPDATE bookings SET status = 'partial' WHERE id = $booking_id AND received_qty > 0 AND received_qty < booked_qty AND status NOT IN ('completed','cancelled')");
+                $conn->query("UPDATE bookings SET status = 'completed' WHERE id = $booking_id AND received_qty >= booked_qty AND status != 'cancelled'");
+                $conn->query("UPDATE bookings SET status = 'pending' WHERE id = $booking_id AND received_qty <= 0 AND status NOT IN ('completed','cancelled')");
+            }
         }
 
         $conn->commit();

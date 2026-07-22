@@ -49,7 +49,10 @@ include '../../includes/header.php';
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-warehouse mr-1"></i> Warehouse Stock</h1>
-    <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#addStockModal"><i class="fas fa-plus-circle mr-1"></i> Add Stock</button>
+    <div>
+        <button class="btn btn-primary btn-sm" data-toggle="modal" data-target="#addStockModal"><i class="fas fa-plus-circle mr-1"></i> Add Stock</button>
+        <a href="print_warehouse_stock.php" target="_blank" class="btn btn-sm btn-secondary ml-1"><i class="fas fa-print mr-1"></i> Print</a>
+    </div>
 </div>
 
 <?php if ($error): ?><div class="alert alert-danger"><?= $error ?></div><?php endif; ?>
@@ -84,15 +87,22 @@ include '../../includes/header.php';
                     <tr>
                         <th>Product</th>
                         <th>Category</th>
-                        <th class="text-right" width="150">Stock (KG)</th>
+                        <th class="text-right" width="150">Stock</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php while ($s = $stock->fetch_assoc()): ?>
+                    <?php while ($s = $stock->fetch_assoc()):
+                        $is_wheat = (stripos($s['name'], 'wheat') !== false);
+                        if ($is_wheat) {
+                            $wheat_bags = $conn->query("SELECT COALESCE(SUM(num_bags),0) AS b FROM wheat_arrivals WHERE warehouse_id = $wh_id")->fetch_assoc()['b'];
+                        } else {
+                            $wheat_bags = 0;
+                        }
+                    ?>
                     <tr>
                         <td><?= htmlspecialchars($s['name']) ?></td>
                         <td><?= htmlspecialchars($s['category']) ?></td>
-                        <td class="text-right font-weight-bold"><?= qty($s['stock_qty']) ?></td>
+                        <td class="text-right font-weight-bold"><?= qty($s['stock_qty']) ?> KG<?php if ($wheat_bags > 0): ?><small class="text-muted d-block"><?= number_format($wheat_bags) ?> bags</small><?php endif; ?></td>
                     </tr>
                     <?php endwhile; ?>
                 </tbody>

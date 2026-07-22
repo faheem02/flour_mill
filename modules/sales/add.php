@@ -110,7 +110,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $customers = $conn->query("SELECT id, name, balance FROM customers ORDER BY name");
-$warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active' AND type IN ('mill','finished') ORDER BY type, name");
+$warehouses = $conn->query("SELECT w.id, w.name, w.type, COALESCE(SUM(ws.stock_qty),0) as total_stock
+    FROM warehouses w
+    LEFT JOIN warehouse_stock ws ON ws.warehouse_id = w.id
+    WHERE w.status='active' AND w.type IN ('mill','finished')
+    GROUP BY w.id, w.name, w.type
+    ORDER BY w.type, w.name");
 ?>
 <style>
     .summary-card { border-left: 4px solid var(--gold); }
@@ -173,7 +178,7 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
                     <select name="warehouse_id" id="warehouseSelect" class="form-control" required>
                         <option value="">Select Warehouse</option>
                         <?php while ($w = $warehouses->fetch_assoc()): ?>
-                        <option value="<?= $w['id'] ?>"><?= htmlspecialchars($w['name']) ?></option>
+                        <option value="<?= $w['id'] ?>" <?= $w['total_stock'] <= 0 ? 'disabled' : '' ?>><?= htmlspecialchars($w['name']) ?> (Stock: <?= qty($w['total_stock']) ?> KG)</option>
                         <?php endwhile; ?>
                     </select>
                 </div>

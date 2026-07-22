@@ -90,11 +90,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $products = $conn->query("SELECT id, name FROM products WHERE status='active' AND name != 'Wheat (Gandam)' ORDER BY name");
-$mill_warehouses = $conn->query("SELECT w.id, w.name, COALESCE(ws.stock_qty,0) as stock_qty
+$productsArr = [];
+while ($p = $products->fetch_assoc()) { $productsArr[] = $p; }
+$mill_warehouses = $conn->query("SELECT w.id, w.name, COALESCE(SUM(ws.stock_qty),0) as stock_qty
     FROM warehouses w
     LEFT JOIN warehouse_stock ws ON ws.warehouse_id = w.id
     LEFT JOIN products p ON ws.product_id = p.id AND p.name = 'Wheat (Gandam)'
     WHERE w.status='active' AND w.type='mill'
+    GROUP BY w.id, w.name
     ORDER BY w.name");
 $bag_types = $conn->query("SELECT id, name, bag_weight_kg FROM bag_types WHERE status='active' ORDER BY name");
 ?>
@@ -158,7 +161,9 @@ $bag_types = $conn->query("SELECT id, name, bag_weight_kg FROM bag_types WHERE s
             </div>
 
             <div class="card bg-light mb-3">
-                <div class="card-header"><strong>Output Products</strong> <button type="button" class="btn btn-sm btn-success ml-2" onclick="addRow()"><i class="fas fa-plus"></i> Add Product</button></div>
+                <div class="card-header"><strong>Output Products</strong>
+                    <button type="button" class="btn btn-sm btn-warning ml-2" data-toggle="modal" data-target="#addProductModal"><i class="fas fa-plus-circle"></i> New Product</button>
+                    <button type="button" class="btn btn-sm btn-success ml-2" onclick="addRow()"><i class="fas fa-plus"></i> Add Row</button></div>
                 <div class="card-body">
                     <table class="table table-bordered" id="prodTable">
                         <thead>
@@ -172,11 +177,8 @@ $bag_types = $conn->query("SELECT id, name, bag_weight_kg FROM bag_types WHERE s
                         <tbody>
                             <tr>
                                 <td>
-                                    <select name="product_id[]" class="form-control form-control-sm" required>
+                                    <select name="product_id[]" class="form-control form-control-sm product-select" required>
                                         <option value="">Select</option>
-                                        <?php $products->data_seek(0); while ($pr = $products->fetch_assoc()): ?>
-                                        <option value="<?= $pr['id'] ?>"><?= htmlspecialchars($pr['name']) ?></option>
-                                        <?php endwhile; ?>
                                     </select>
                                 </td>
                                 <td><input type="text" name="qty[]" class="form-control form-control-sm text-right" placeholder="0" oninput="calcExtraction()"></td>
@@ -210,7 +212,81 @@ $bag_types = $conn->query("SELECT id, name, bag_weight_kg FROM bag_types WHERE s
     </div>
 </div>
 
+<div class="modal fade" id="addProductModal">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="addProductForm">
+                <div class="modal-header"><h5 class="modal-title">Add New Product</h5><button type="button" class="close" data-dismiss="modal">&times;</button></div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Product Name <span class="text-danger">*</span></label>
+                        <input type="text" name="name" id="newProdName" class="form-control" required placeholder="e.g. Special Atta">
+                    </div>
+                    <div class="form-group">
+                        <label>Category</label>
+                        <select name="category" class="form-control">
+                            <option value="Flour">Flour (Atta, Maida, Suji)</option>
+                            <option value="By-Product">By-Product (Bran)</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Sale Price (per KG)</label>
+                        <input type="text" name="sale_price" class="form-control" placeholder="0.00">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save mr-1"></i> Save & Select</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
+var productOptions = <?= json_encode($productsArr) ?>;
+
+function populateProductDropdowns(selectedId) {
+    var opts = '<option value="">Select</option>';
+    productOptions.forEach(function(p) {
+        var sel = (selectedId && p.id == selectedId) ? ' selected' : '';
+        opts += '<option value="' + p.id + '"' + sel + '>' + p.name + '</option>';
+    });
+    $('select.product-select').each(function() {
+        var cur = $(this).val();
+        $(this).html(opts);
+        if (cur && !selectedId) $(this).val(cur);
+    });
+}
+
+$('#addProductForm').on('submit', function(e) {
+    e.preventDefault();
+    var $btn = $(this).find('button[type="submit"]');
+    $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Saving...');
+    $.ajax({
+        url: '<?= $base_url ?>modules/products/add_ajax.php',
+        type: 'POST',
+        data: $(this).serialize(),
+        dataType: 'json',
+        success: function(res) {
+            if (res.error) { alert(res.error); $btn.prop('disabled', false).html('<i class="fas fa-save mr-1"></i> Save & Select'); return; }
+            if (!res.duplicate) {
+                productOptions.push({id: res.id, name: res.name});
+                productOptions.sort(function(a, b) { return a.name.localeCompare(b.name); });
+            }
+            populateProductDropdowns(res.id);
+            $('#addProductModal').modal('hide');
+            $('#addProductForm')[0].reset();
+            $btn.prop('disabled', false).html('<i class="fas fa-save mr-1"></i> Save & Select');
+        },
+        error: function() {
+            alert('Error adding product');
+            $btn.prop('disabled', false).html('<i class="fas fa-save mr-1"></i> Save & Select');
+        }
+    });
+});
+
 function calcWheatQty() {
     var bagQty = parseFloat($('#bagQty').val()) || 0;
     var bagWeight = parseFloat($('#bagTypeId option:selected').data('weight')) || 50;
@@ -221,8 +297,12 @@ function calcWheatQty() {
 }
 
 function addRow() {
+    var opts = '<option value="">Select</option>';
+    productOptions.forEach(function(p) {
+        opts += '<option value="' + p.id + '">' + p.name + '</option>';
+    });
     var html = '<tr>' +
-        '<td><select name="product_id[]" class="form-control form-control-sm" required><option value="">Select</option><?php $products->data_seek(0); while ($pr = $products->fetch_assoc()): ?><option value="<?= $pr['id'] ?>"><?= htmlspecialchars($pr['name']) ?></option><?php endwhile; ?></select></td>' +
+        '<td><select name="product_id[]" class="form-control form-control-sm product-select" required>' + opts + '</select></td>' +
         '<td><input type="text" name="qty[]" class="form-control form-control-sm text-right" placeholder="0" oninput="calcExtraction()"></td>' +
         '<td><input type="text" name="rate[]" class="form-control form-control-sm text-right" placeholder="0.00"></td>' +
         '<td class="text-center"><button type="button" class="btn btn-danger btn-sm" onclick="this.closest(\'tr\').remove();calcExtraction()"><i class="fas fa-times"></i></button></td>' +
@@ -240,6 +320,8 @@ function calcExtraction() {
     var ext = wheat > 0 ? ((total / wheat) * 100).toFixed(2) : '0.00';
     $('#extractionRate').text(ext + '%');
 }
+
+$(function() { populateProductDropdowns(); });
 </script>
 
 <?php include '../../includes/footer.php'; ?>

@@ -32,7 +32,9 @@ $farmer_wheat = ($bag ? $bag['quantity'] : 0) * 50;
 $katt_total   = $bag ? ($bag['quantity'] * $booking['katt_per_bag']) : 0;
 $net_qty      = $farmer_wheat + $katt_total;
 $mans         = $farmer_wheat / 40;
-$total_value  = $mans * $booking['rate'];
+$bag_rate_total = ($bag && $bag['ownership'] === 'farmer') ? ($bag['quantity'] * ($bag['bag_rate'] ?? 0)) : 0;
+$wheat_value    = $mans * $booking['rate'];
+$total_value    = $wheat_value + $bag_rate_total;
 $total_paid   = $conn->query("SELECT COALESCE(SUM(amount),0) AS t FROM farmer_payments WHERE booking_id = $id")->fetch_assoc()['t'];
 $remaining    = max(0, $total_value - $total_paid);
 $badge        = match($booking['status']) {
@@ -104,6 +106,10 @@ $badge        = match($booking['status']) {
                         <th>Moisture</th>
                         <td><?= $booking['moisture_percent'] > 0 ? $booking['moisture_percent'] . '%' : '-' ?></td>
                     </tr>
+                    <tr>
+                        <th>Delivery Type</th>
+                        <td><span class="badge badge-<?= ($booking['delivery_type'] ?? 'pickup') === 'delivery' ? 'info' : 'primary' ?>"><?= ($booking['delivery_type'] ?? 'pickup') === 'delivery' ? 'We Will Pickup' : 'Farmer Will Send' ?></span></td>
+                    </tr>
                 </table>
             </div>
         </div>
@@ -146,7 +152,7 @@ $badge        = match($booking['status']) {
                 <table class="table table-sm voucher-table">
                     <tr>
                         <th>Farmer's Wheat</th>
-                        <td class="text-right"><?= qty($farmer_wheat) ?> KG</td>
+                        <td class="text-right"><?= qty($farmer_wheat) ?> KG <small class="text-muted d-block"><?= $bag ? $bag['quantity'] : 0 ?> bags × 50 KG</small></td>
                         <td class="text-muted small">Bag Qty × 50 KG</td>
                     </tr>
                     <tr>
@@ -156,7 +162,7 @@ $badge        = match($booking['status']) {
                     </tr>
                     <tr class="table-active">
                         <th><strong>Net Qty (Stock)</strong></th>
-                        <td class="text-right"><strong><?= qty($net_qty) ?> KG</strong></td>
+                        <td class="text-right"><strong><?= qty($net_qty) ?> KG</strong> <small class="text-muted d-block"><?= $bag ? $bag['quantity'] : 0 ?> bags</small></td>
                         <td></td>
                     </tr>
                 </table>
@@ -172,8 +178,18 @@ $badge        = match($booking['status']) {
                         <th>Mans</th>
                         <td class="text-right"><?= qty($mans) ?></td>
                     </tr>
+                    <tr>
+                        <th>Wheat Value</th>
+                        <td class="text-right"><strong><?= money($wheat_value) ?></strong></td>
+                    </tr>
+                    <?php if ($bag_rate_total > 0): ?>
+                    <tr>
+                        <th>Bag Rate × <?= $bag['quantity'] ?> bags</th>
+                        <td class="text-right"><?= money($bag_rate_total) ?></td>
+                    </tr>
+                    <?php endif; ?>
                     <tr class="table-active">
-                        <th><strong>Total Value</strong></th>
+                        <th><strong>Grand Total</strong></th>
                         <td class="text-right"><strong><?= money($total_value) ?></strong></td>
                     </tr>
                 </table>
@@ -186,10 +202,18 @@ $badge        = match($booking['status']) {
         <div class="row">
             <div class="col-sm-3">
                 <div class="footer-stat">
-                    <div class="stat-label">Total Value</div>
-                    <div class="stat-value"><?= money($total_value) ?></div>
+                    <div class="stat-label">Wheat Value</div>
+                    <div class="stat-value"><?= money($wheat_value) ?></div>
                 </div>
             </div>
+            <?php if ($bag_rate_total > 0): ?>
+            <div class="col-sm-3">
+                <div class="footer-stat">
+                    <div class="stat-label">Bag Charges</div>
+                    <div class="stat-value"><?= money($bag_rate_total) ?></div>
+                </div>
+            </div>
+            <?php endif; ?>
             <div class="col-sm-3">
                 <div class="footer-stat">
                     <div class="stat-label">Advance Paid</div>
@@ -200,6 +224,12 @@ $badge        = match($booking['status']) {
                 <div class="footer-stat">
                     <div class="stat-label">Total Paid</div>
                     <div class="stat-value stat-success"><?= money($total_paid) ?></div>
+                </div>
+            </div>
+            <div class="col-sm-3">
+                <div class="footer-stat">
+                    <div class="stat-label">Grand Total</div>
+                    <div class="stat-value"><?= money($total_value) ?></div>
                 </div>
             </div>
             <div class="col-sm-3">

@@ -9,18 +9,23 @@ $id = (int)($_GET['id'] ?? 0);
 $arrival = $conn->query("SELECT * FROM wheat_arrivals WHERE id = $id")->fetch_assoc();
 if (!$arrival) { header("Location: list.php"); exit; }
 
+$stock_weight = ($arrival['actual_weight'] > 0) ? $arrival['actual_weight'] : $arrival['net_weight'];
+
 $conn->begin_transaction();
 try {
-    // Reverse warehouse stock
+    // Reverse warehouse stock (using actual/net, same rule as posting)
     $wheat = $conn->query("SELECT id FROM products WHERE name = 'Wheat (Gandam)' LIMIT 1")->fetch_assoc();
-    if ($wheat && $arrival['warehouse_id'] > 0 && $arrival['net_weight'] > 0) {
+    if ($wheat && $arrival['warehouse_id'] > 0 && $stock_weight > 0) {
         $pid = $wheat['id'];
-        $conn->query("UPDATE warehouse_stock SET stock_qty = GREATEST(stock_qty - {$arrival['net_weight']}, 0) WHERE warehouse_id = {$arrival['warehouse_id']} AND product_id = $pid");
+        $conn->query("UPDATE warehouse_stock SET stock_qty = GREATEST(stock_qty - $stock_weight, 0) WHERE warehouse_id = {$arrival['warehouse_id']} AND product_id = $pid");
+        $conn->query("UPDATE products SET stock_qty = GREATEST(stock_qty - $stock_weight, 0) WHERE id = $pid");
+        $conn->query("DELETE FROM stock_ledger WHERE product_id = $pid AND type = 'arrival' AND reference_id = {$arrival['id']}");
     }
 
-    // Reverse booking received_qty
-    if ($arrival['booking_id'] > 0 && $arrival['net_weight'] > 0) {
-        $conn->query("UPDATE bookings SET received_qty = GREATEST(received_qty - {$arrival['net_weight']}, 0) WHERE id = {$arrival['booking_id']}");
+    // Reverse booking received_qty by wheat (gross_weight), matching booked_qty (wheat only) semantics
+    $wheat_received = $arrival['gross_weight'];
+    if ($arrival['booking_id'] > 0 && $wheat_received > 0) {
+        $conn->query("UPDATE bookings SET received_qty = GREATEST(received_qty - $wheat_received, 0) WHERE id = {$arrival['booking_id']}");
         $conn->query("UPDATE bookings SET status = 'pending' WHERE id = {$arrival['booking_id']} AND received_qty <= 0 AND status != 'completed'");
         $conn->query("UPDATE bookings SET status = 'partial' WHERE id = {$arrival['booking_id']} AND received_qty > 0 AND received_qty < booked_qty");
     }

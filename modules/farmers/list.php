@@ -24,16 +24,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $phone = sanitize($_POST['phone']);
     $village = sanitize($_POST['village']);
     $city = sanitize($_POST['city']);
+    $opening_balance = str_replace(',', '', $_POST['opening_balance'] ?? 0);
 
     if (empty($name)) {
         $error = "Name is required.";
     } elseif ($id) {
-        $conn->query("UPDATE farmers SET name='$name', phone='$phone', village='$village', city='$city' WHERE id=$id");
+        $conn->query("UPDATE farmers SET name='$name', phone='$phone', village='$village', city='$city', opening_balance=$opening_balance, balance=$opening_balance WHERE id=$id");
         setFlash("Farmer updated.");
         header("Location: list.php");
         exit;
     } else {
-        $conn->query("INSERT INTO farmers (name, phone, village, city) VALUES ('$name', '$phone', '$village', '$city')");
+        $conn->query("INSERT INTO farmers (name, phone, village, city, opening_balance, balance) VALUES ('$name', '$phone', '$village', '$city', $opening_balance, $opening_balance)");
         setFlash("Farmer added.");
         header("Location: list.php");
         exit;
@@ -53,7 +54,7 @@ include '../../includes/header.php';
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-tractor mr-1"></i> Farmers</h1>
     <div>
         <a href="#" class="btn btn-sm btn-primary" data-toggle="modal" data-target="#farmerModal"><i class="fas fa-plus-circle mr-1"></i> New Farmer</a>
-        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+        <a href="print_list.php" class="btn btn-sm btn-info" target="_blank"><i class="fas fa-print mr-1"></i> Print Directory</a>
     </div>
 </div>
 
@@ -86,10 +87,10 @@ include '../../includes/header.php';
                         <td><?= htmlspecialchars($f['city']) ?></td>
                         <td class="text-right"><?= money($f['balance']) ?></td>
                         <td>
-                            <a href="ledger.php?id=<?= $f['id'] ?>" class="btn btn-sm btn-info" title="Ledger"><i class="fas fa-book"></i></a>
-                            <a href="payment.php?farmer_id=<?= $f['id'] ?>" class="btn btn-sm btn-success" title="Pay"><i class="fas fa-money-bill-wave"></i></a>
-                            <a href="#" class="btn btn-sm btn-warning" title="Edit" onclick="editFarmer(<?= $f['id'] ?>, '<?= htmlspecialchars(addslashes($f['name'])) ?>', '<?= htmlspecialchars(addslashes($f['phone'])) ?>', '<?= htmlspecialchars(addslashes($f['village'])) ?>', '<?= htmlspecialchars(addslashes($f['city'])) ?>')"><i class="fas fa-edit"></i></a>
-                            <a href="list.php?delete=<?= $f['id'] ?>" class="btn btn-sm btn-danger" title="Delete" onclick="return confirm('Delete this farmer?')"><i class="fas fa-trash"></i></a>
+                            <a href="ledger.php?id=<?= $f['id'] ?>" class="btn btn-sm btn-outline-info mr-1" title="Ledger"><i class="fas fa-book"></i></a>
+                            <a href="payment.php?farmer_id=<?= $f['id'] ?>" class="btn btn-sm btn-outline-success mr-1" title="Pay"><i class="fas fa-money-bill-wave"></i></a>
+                            <a href="#" class="btn btn-sm btn-outline-warning mr-1" title="Edit" onclick="editFarmer(<?= $f['id'] ?>, '<?= htmlspecialchars(addslashes($f['name'])) ?>', '<?= htmlspecialchars(addslashes($f['phone'])) ?>', '<?= htmlspecialchars(addslashes($f['village'])) ?>', '<?= htmlspecialchars(addslashes($f['city'])) ?>', <?= $f['opening_balance'] ?? 0 ?>)"><i class="fas fa-edit"></i></a>
+                            <a href="list.php?delete=<?= $f['id'] ?>" class="btn btn-sm btn-outline-danger" title="Delete" onclick="return confirm('Delete this farmer?')"><i class="fas fa-trash"></i></a>
                         </td>
                     </tr>
                     <?php endwhile; ?>
@@ -119,12 +120,16 @@ include '../../includes/header.php';
                         <input type="text" name="phone" id="farmerPhone" class="form-control">
                     </div>
                     <div class="form-group">
-                        <label>Village</label>
+                        <label>Location</label>
                         <input type="text" name="village" id="farmerVillage" class="form-control">
                     </div>
                     <div class="form-group">
                         <label>City</label>
                         <input type="text" name="city" id="farmerCity" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Opening Balance (Rs)</label>
+                        <input type="text" name="opening_balance" id="farmerOpeningBalance" class="form-control" value="0">
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -137,12 +142,13 @@ include '../../includes/header.php';
 </div>
 
 <script>
-function editFarmer(id, name, phone, village, city) {
+function editFarmer(id, name, phone, village, city, opening_balance) {
     $('#farmerId').val(id);
     $('#farmerName').val(name);
     $('#farmerPhone').val(phone);
     $('#farmerVillage').val(village);
     $('#farmerCity').val(city);
+    $('#farmerOpeningBalance').val(opening_balance);
     $('#modalTitle').text('Edit Farmer');
     $('#farmerModal').modal('show');
 }
@@ -153,6 +159,7 @@ $('#farmerModal').on('hidden.bs.modal', function () {
     $('#farmerPhone').val('');
     $('#farmerVillage').val('');
     $('#farmerCity').val('');
+    $('#farmerOpeningBalance').val('0');
     $('#modalTitle').text('Add Farmer');
 });
 </script>

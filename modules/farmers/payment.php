@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
         try {
             $conn->query("INSERT INTO farmer_payments (farmer_id, date, amount, type, payment_mode, booking_id, notes)
                 VALUES ($farmer_id, '$date', $amount, 'payment', '$payment_mode', " . ($booking_id ?: "NULL") . ", '$notes')");
-            $conn->query("UPDATE farmers SET balance = balance + $amount WHERE id = $farmer_id");
+            $conn->query("UPDATE farmers SET balance = balance - $amount WHERE id = $farmer_id");
 
             // Auto journal entry
             $desc = "Payment to farmer - $farmer_name" . ($booking_id ? " (Booking #$booking_id)" : "");
@@ -33,7 +33,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['pay'])) {
             autoJournalEntry($date, $desc, [17 => $amount], [$credit_account => $amount], $_SESSION['user_id']);
 
             $conn->commit();
-            setFlash("Payment of Rs " . money($amount) . " recorded.");
+            $new_payment_id = $conn->insert_id;
+            header("Location: payment_receipt.php?id=$new_payment_id");
+            exit;
         } catch (Exception $e) {
             $conn->rollback();
             setFlash("Error: " . $e->getMessage());
@@ -50,7 +52,6 @@ include '../../includes/header.php';
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-money-bill-wave mr-1"></i> Farmer Payment</h1>
     <div>
         <a href="list.php" class="btn btn-sm btn-secondary"><i class="fas fa-arrow-left mr-1"></i> Farmer List</a>
-        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
     </div>
 </div>
 
@@ -104,6 +105,9 @@ if (!$farmer) { echo "<div class='alert alert-danger'>Farmer not found.</div>"; 
 
 $bookings = $conn->query("
     SELECT b.*,
+        COALESCE((SELECT quantity FROM booking_bags WHERE booking_id = b.id LIMIT 1), 0) AS bag_qty,
+        COALESCE((SELECT ownership FROM booking_bags WHERE booking_id = b.id LIMIT 1), 'company') AS bag_ownership,
+        COALESCE((SELECT bag_rate FROM booking_bags WHERE booking_id = b.id LIMIT 1), 0) AS bag_rate,
         COALESCE((SELECT SUM(amount) FROM farmer_payments WHERE booking_id = b.id AND type='payment'), 0) AS extra_paid
     FROM bookings b WHERE b.farmer_id = $farmer_id ORDER BY b.date DESC
 ");
@@ -124,7 +128,9 @@ $bookings = $conn->query("
                         <select name="booking_id" class="form-control">
                             <option value="">-- Without Booking --</option>
                             <?php while ($b = $bookings->fetch_assoc()):
-                                $total_val = $b['booked_qty'] * $b['rate'];
+                                $farmer_wheat = $b['bag_qty'] * 50;
+                                $mans = $farmer_wheat / 40;
+                                $total_val = ($mans * $b['rate']) + ($b['bag_ownership'] === 'farmer' ? $b['bag_qty'] * $b['bag_rate'] : 0);
                                 $total_paid = $b['advance_amount'] + $b['extra_paid'];
                                 $remaining = max(0, $total_val - $total_paid);
                             ?>
@@ -215,13 +221,14 @@ $bookings = $conn->query("
         <!-- Pending Bookings -->
         <?php
         $conn->query("SET @prev_farmer = $farmer_id");
-        $pending_b = $conn->query("
-            SELECT b.*,
-                COALESCE((SELECT SUM(amount) FROM farmer_payments WHERE booking_id = b.id AND type='payment'), 0) AS extra_paid
-            FROM bookings b
-            WHERE b.farmer_id = $farmer_id AND b.status IN ('pending','partial')
-            ORDER BY b.date DESC
-        ");
+$pending_b = $conn->query("
+    SELECT b.*,
+        COALESCE((SELECT quantity FROM booking_bags WHERE booking_id = b.id LIMIT 1), 0) AS bag_qty,
+        COALESCE((SELECT SUM(amount) FROM farmer_payments WHERE booking_id = b.id AND type='payment'), 0) AS extra_paid
+    FROM bookings b
+    WHERE b.farmer_id = $farmer_id AND b.status IN ('pending','partial')
+    ORDER BY b.date DESC
+");
         ?>
         <?php if ($pending_b && $pending_b->num_rows > 0): ?>
         <div class="card shadow mb-4">
@@ -240,7 +247,9 @@ $bookings = $conn->query("
                         </thead>
                         <tbody>
                             <?php while ($pb = $pending_b->fetch_assoc()):
-                                $tv = $pb['booked_qty'] * $pb['rate'];
+                                $farmer_wheat2 = $pb['bag_qty'] * 50;
+                                $mans2 = $farmer_wheat2 / 40;
+                                $tv = $mans2 * $pb['rate'];
                                 $tp2 = $pb['advance_amount'] + $pb['extra_paid'];
                                 $rem = max(0, $tv - $tp2);
                             ?>

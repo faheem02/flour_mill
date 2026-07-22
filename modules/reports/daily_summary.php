@@ -32,10 +32,13 @@ $payments = ['amt' => 0];
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-chart-bar mr-1"></i> Daily Summary</h1>
-    <form method="GET" class="form-inline">
-        <input type="date" name="date" class="form-control form-control-sm mr-2" value="<?= $date ?>">
-        <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search"></i> View</button>
-    </form>
+    <div>
+        <form method="GET" class="form-inline d-inline">
+            <input type="date" name="date" class="form-control form-control-sm mr-2" value="<?= $date ?>">
+            <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-search"></i> View</button>
+        </form>
+        <button class="btn btn-sm btn-primary ml-1" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+    </div>
 </div>
 
 <div class="row">

@@ -23,7 +23,7 @@ $result = $conn->query("SELECT a.*, w.name as warehouse_name, b.booking_no, f.na
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-truck-loading mr-1"></i> Arrival Register</h1>
     <div>
         <a href="add.php" class="btn btn-primary btn-sm"><i class="fas fa-plus-circle mr-1"></i> New Arrival</a>
-        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+        <a href="print_list.php" class="btn btn-sm btn-info" target="_blank"><i class="fas fa-print mr-1"></i> Print Register</a>
     </div>
 </div>
 
@@ -39,7 +39,7 @@ $result = $conn->query("SELECT a.*, w.name as warehouse_name, b.booking_no, f.na
                         <th>Date</th>
                         <th>Booking</th>
                         <th>Farmer</th>
-                        <th>Vehicle / Driver</th>
+                        <th>Vehicle#</th>
                         <th>Bags</th>
                         <th class="text-right">Net KG</th>
                         <th class="text-right">Actual KG</th>
@@ -47,11 +47,12 @@ $result = $conn->query("SELECT a.*, w.name as warehouse_name, b.booking_no, f.na
                         <th class="text-right">Gross</th>
                         <th class="text-right">Charges</th>
                         <th class="text-right">Net Amt</th>
+                        <th class="text-right">Paid</th>
                         <th class="no-print">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php $total_bags = $total_net = $total_actual = $total_gross = $total_charges = $total_net_amt = 0; ?>
+                    <?php $total_bags = $total_net = $total_actual = $total_gross = $total_charges = $total_net_amt = $total_paid = 0; ?>
                     <?php while ($row = $result->fetch_assoc()):
                         $charges = ($row['bag_amount']??0) + ($row['labour_charges']??0) + ($row['transport_charges']??0) + ($row['other_charges']??0);
                         $total_bags += $row['num_bags'];
@@ -60,6 +61,7 @@ $result = $conn->query("SELECT a.*, w.name as warehouse_name, b.booking_no, f.na
                         $total_gross += $row['gross_amount'];
                         $total_charges += $charges;
                         $total_net_amt += $row['net_amount'];
+                        $total_paid += ($row['payment_now'] ?? 0);
                     ?>
                     <tr>
                         <td class="text-nowrap"><?= date('d-m-Y', strtotime($row['date'])) ?></td>
@@ -99,6 +101,7 @@ $result = $conn->query("SELECT a.*, w.name as warehouse_name, b.booking_no, f.na
                             <?php endif; ?>
                         </td>
                         <td class="text-right font-weight-bold text-success"><?= money($row['net_amount']) ?></td>
+                        <td class="text-right font-weight-bold <?= ($row['payment_now'] ?? 0) > 0 ? 'text-primary' : '' ?>"><?= ($row['payment_now'] ?? 0) > 0 ? money($row['payment_now']) : '-' ?></td>
                         <td class="text-nowrap no-print">
                             <div class="btn-group btn-group-sm">
                                 <a href="#" class="btn btn-info btn-action" title="View" onclick="viewArrival(<?= $row['id'] ?>);return false"><i class="fas fa-eye"></i></a>
@@ -119,6 +122,7 @@ $result = $conn->query("SELECT a.*, w.name as warehouse_name, b.booking_no, f.na
                         <td class="text-right"><?= money($total_gross) ?></td>
                         <td class="text-right"><?= money($total_charges) ?></td>
                         <td class="text-right"><?= money($total_net_amt) ?></td>
+                        <td class="text-right"><?= money($total_paid) ?></td>
                         <td class="no-print"></td>
                     </tr>
                 </tfoot>
@@ -242,6 +246,10 @@ function viewArrival(id) {
         h += '<div class="financial-row d-flex justify-content-between"><span>Other Charges</span><strong>' + parseFloat(d.other_charges).toLocaleString(undefined, {minimumFractionDigits:2}) + '</strong></div>';
         var netCls = parseFloat(d.net_amount) >= 0 ? 'text-success' : 'text-danger';
         h += '<div class="financial-row d-flex justify-content-between" style="border-top:2px solid #1B2A4A;padding-top:8px;margin-top:4px;"><span class="font-weight-bold" style="font-size:16px;">Net Amount</span><span class="font-weight-bold ' + netCls + '" style="font-size:18px;">' + parseFloat(d.net_amount).toLocaleString(undefined, {minimumFractionDigits:2}) + '</span></div>';
+        var paidNow = parseFloat(d.payment_now || 0);
+        if (paidNow > 0) {
+            h += '<div class="financial-row d-flex justify-content-between" style="padding-top:6px;"><span class="font-weight-bold" style="font-size:14px;">Paid on Arrival</span><span class="font-weight-bold text-primary" style="font-size:16px;">' + paidNow.toLocaleString(undefined, {minimumFractionDigits:2}) + '</span></div>';
+        }
         h += '</div>';
         h += '</div></div>';
 

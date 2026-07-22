@@ -14,7 +14,7 @@ $result = $conn->query("SELECT p.* FROM productions p ORDER BY p.date DESC, p.id
     <div>
         <a href="add.php" class="btn btn-primary btn-sm"><i class="fas fa-plus-circle mr-1"></i> New Crush</a>
         <a href="report.php" class="btn btn-info btn-sm"><i class="fas fa-chart-bar mr-1"></i> Extraction Report</a>
-        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+        <a href="print_list.php" class="btn btn-sm btn-info" target="_blank"><i class="fas fa-print mr-1"></i> Print Register</a>
     </div>
 </div>
 
@@ -41,10 +41,11 @@ $result = $conn->query("SELECT p.* FROM productions p ORDER BY p.date DESC, p.id
                             $rate_text = $it['rate_per_kg'] > 0 ? ' @ Rs ' . money($it['rate_per_kg']) : '';
                             $products_list[] = $it['name'] . ': ' . qty($it['qty']) . ' KG' . $rate_text;
                         }
+                        $wheat_bags = $row['wheat_qty'] > 0 ? round($row['wheat_qty'] / 50) : 0;
                     ?>
                     <tr>
                         <td><?= $row['date'] ?></td>
-                        <td class="text-right"><?= qty($row['wheat_qty']) ?></td>
+                        <td class="text-right"><?= qty($row['wheat_qty']) ?> <small class="text-muted d-block"><?= number_format($wheat_bags) ?> bags</small></td>
                         <td class="text-right"><?= qty($row['total_output']) ?></td>
                         <td class="text-right <?= $row['wastage_qty']>0?'text-danger':'' ?>"><?= qty($row['wastage_qty']) ?></td>
                         <td class="text-right font-weight-bold"><?= number_format($row['extraction_rate'],1) ?>%</td>

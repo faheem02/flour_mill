@@ -29,7 +29,7 @@ $bank_accounts = $conn->query("SELECT id, account_name, bank_name, account_no, b
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-university mr-1"></i> Bank Book</h1>
     <div>
         <span class="font-weight-bold">Total Balance: Rs <?= money($bank_balance) ?></span>
-        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+        <a href="print_bank_book.php?from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>" class="btn btn-sm btn-info ml-2" target="_blank"><i class="fas fa-print mr-1"></i> Print</a>
     </div>
 </div>
 

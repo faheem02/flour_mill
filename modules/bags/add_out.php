@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $date = $_POST['date'];
     $warehouse_id = (int)$_POST['warehouse_id'];
     $qty = (int)str_replace(',', '', $_POST['qty']);
+    $rate = str_replace(',', '', $_POST['rate'] ?? '0');
     $notes = sanitize($_POST['notes']);
 
     if ($warehouse_id <= 0) { $error = "Select warehouse."; }
@@ -28,12 +29,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $conn->query("UPDATE bag_stock SET qty = qty - $qty WHERE warehouse_id=$warehouse_id");
                 $bal = $conn->query("SELECT qty FROM bag_stock WHERE warehouse_id=$warehouse_id")->fetch_assoc()['qty'];
 
-                $conn->query("INSERT INTO bag_stock_ledger (date, warehouse_id, qty_in, qty_out, balance_qty, type, notes)
-                    VALUES ('$date', $warehouse_id, 0, $qty, $bal, 'manual_out', '$notes')");
+                $conn->query("INSERT INTO bag_stock_ledger (date, warehouse_id, qty_in, qty_out, balance_qty, rate, type, notes)
+                    VALUES ('$date', $warehouse_id, 0, $qty, $bal, $rate, 'manual_out', '$notes')");
 
                 $conn->commit();
+                $new_id = $conn->insert_id;
                 setFlash("Bags OUT recorded: $qty bags removed.");
-                header("Location: ledger.php");
+                header("Location: print_slip.php?id=$new_id");
                 exit;
             } catch (Exception $e) {
                 $conn->rollback();
@@ -50,7 +52,9 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
 
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-arrow-up text-warning mr-1"></i> Bags OUT</h1>
-    <a href="ledger.php" class="btn btn-sm btn-secondary"><i class="fas fa-arrow-left mr-1"></i> Ledger</a>
+    <div>
+        <a href="ledger.php" class="btn btn-sm btn-secondary"><i class="fas fa-arrow-left mr-1"></i> Ledger</a>
+    </div>
 </div>
 
 <?php if ($error): ?><div class="alert alert-danger"><?= $error ?></div><?php endif; ?>
@@ -82,6 +86,12 @@ $warehouses = $conn->query("SELECT id, name FROM warehouses WHERE status='active
                         <label>Quantity (Bags) <span class="text-danger">*</span></label>
                         <input type="number" name="qty" class="form-control" min="1" placeholder="0" required>
                         <small class="text-muted" id="stockInfo"></small>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label>Rate (per Bag)</label>
+                        <input type="number" name="rate" class="form-control" min="0" step="0.01" placeholder="0">
                     </div>
                 </div>
             </div>

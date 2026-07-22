@@ -20,6 +20,7 @@ $farmers_active      = in_array($active_page ?? '', ['farmer_list','farmer_ledge
 $stock_active        = in_array($active_page ?? '', ['product_stock','stock_ledger','stock_adjustment']);
 $reports_active      = in_array($active_page ?? '', ['daily_summary']);
 $bags_active         = in_array($active_page ?? '', ['bag_in','bag_out','bag_adjust','bag_ledger']);
+$parties_active      = in_array($active_page ?? '', ['party_list','party_paid']);
 
 ?>
 <!DOCTYPE html>
@@ -363,17 +364,35 @@ $bags_active         = in_array($active_page ?? '', ['bag_in','bag_out','bag_adj
         .card-dashboard .h5 { font-size: 1.5rem; }
 
         @media print {
-            body * { visibility: hidden; }
-            .container-fluid, .container-fluid * { visibility: visible; }
-            .container-fluid { position: absolute; left: 0; top: 0; width: 100%; }
-            .sidebar, .fixed-topbar, .fixed-footer, .btn, .no-print,
-            .dataTables_filter, .dataTables_length, .dataTables_info, .dataTables_paginate { display: none !important; }
-            #content-wrapper { margin: 0 !important; padding: 0 !important; }
-            .card { border: none !important; box-shadow: none !important; }
-            .card-header { background: #f8f9fc !important; border: 1px solid #ddd !important; }
-            .table { border-collapse: collapse !important; }
-            .table th, .table td { border: 1px solid #000 !important; }
-            @page { margin: 0.5in; }
+            * { visibility: hidden !important; }
+            #content, #content * { visibility: visible !important; }
+            .sidebar, .fixed-topbar, footer, .scroll-to-top,
+            .btn, .no-print, .sidebar-overlay,
+            .dataTables_filter, .dataTables_length, .dataTables_info, .dataTables_paginate,
+            #content-wrapper > footer { display: none !important; }
+            body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+            #wrapper { display: block !important; }
+            #content-wrapper { margin: 0 !important; padding: 0 !important; width: 100% !important; overflow: visible !important; }
+            #content { margin: 0 !important; padding: 10px !important; width: 100% !important; }
+            .container-fluid { padding: 0 !important; max-width: 100% !important; }
+            .card { border: none !important; box-shadow: none !important; break-inside: avoid; }
+            .card-header { background: #f0f0f0 !important; border-bottom: 2px solid #333 !important; padding: 8px 12px !important; }
+            .card-body { padding: 8px !important; }
+            .table { width: 100% !important; font-size: 12px !important; border-collapse: collapse !important; }
+            .table th, .table td { border: 1px solid #333 !important; padding: 4px 6px !important; vertical-align: middle !important; }
+            .table th { background: #e9ecef !important; font-weight: 700 !important; font-size: 11px !important; white-space: nowrap !important; }
+            .table-responsive { overflow: visible !important; display: block !important; }
+            .progress { border: 1px solid #ccc !important; }
+            .progress-bar { background: #999 !important; color: #000 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .badge { border: 1px solid #999 !important; font-size: 10px !important; }
+            .text-success { color: #28a745 !important; }
+            .text-danger { color: #dc3545 !important; }
+            .text-primary { color: #007bff !important; }
+            h1, h3, h5, h6 { font-size: 16px !important; }
+            .row { display: flex !important; flex-wrap: wrap !important; }
+            .row > [class*="col-"] { flex: 0 0 auto !important; }
+            a[href]::after { content: none !important; }
+            @page { margin: 0.4in; size: landscape; }
         }
     </style>
 </head>
@@ -423,7 +442,7 @@ $bags_active         = in_array($active_page ?? '', ['bag_in','bag_out','bag_adj
                     <div class="py-2 collapse-inner rounded">
                         <a class="collapse-item <?= navActive('arrival_add', $active_page ?? '') ?>" href="<?= $base_url ?>modules/arrivals/add.php"><i class="fas fa-plus-circle fa-sm mr-1"></i> New Arrival</a>
                         <a class="collapse-item <?= navActive('arrival_list', $active_page ?? '') ?>" href="<?= $base_url ?>modules/arrivals/list.php"><i class="fas fa-list fa-sm mr-1"></i> Arrival Register</a>
-                        <a class="collapse-item <?= navActive('arrival_stock', $active_page ?? '') ?>" href="<?= $base_url ?>modules/arrivals/stock.php"><i class="fas fa-warehouse fa-sm mr-1"></i> Raw Material Stock</a>
+
                     </div>
                 </div>
             </li>
@@ -560,6 +579,22 @@ $bags_active         = in_array($active_page ?? '', ['bag_in','bag_out','bag_adj
             </li>
 
             <hr class="sidebar-divider">
+            <div class="sidebar-heading">General Party</div>
+            <li class="nav-item <?= $parties_active ? 'active' : '' ?>">
+                <a class="nav-link <?= $parties_active ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseParties" aria-expanded="<?= $parties_active ? 'true' : 'false' ?>">
+                    <i class="fas fa-fw fa-building"></i>
+                    <span>General Party</span>
+                </a>
+                <div id="collapseParties" class="collapse <?= $parties_active ? 'show' : '' ?>" data-parent="#accordionSidebar">
+                    <div class="py-2 collapse-inner rounded">
+                        <a class="collapse-item <?= navActive('party_list', $active_page ?? '') ?>" href="<?= $base_url ?>modules/parties/list.php"><i class="fas fa-list fa-sm mr-1"></i> View Party</a>
+                        <a class="collapse-item <?= navActive('party_list', $active_page ?? '') ?>" href="<?= $base_url ?>modules/parties/add_received.php"><i class="fas fa-file-invoice-dollar fa-sm mr-1"></i> Add Received</a>
+                        <a class="collapse-item <?= navActive('party_paid', $active_page ?? '') ?>" href="<?= $base_url ?>modules/parties/add_paid.php"><i class="fas fa-money-bill-wave fa-sm mr-1"></i> Add Paid</a>
+                    </div>
+                </div>
+            </li>
+
+            <hr class="sidebar-divider">
             <div class="sidebar-heading">Accounts</div>
             <li class="nav-item <?= $accounts_active ? 'active' : '' ?>">
                 <a class="nav-link <?= $accounts_active ? '' : 'collapsed' ?>" href="#" data-toggle="collapse" data-target="#collapseAccounts" aria-expanded="<?= $accounts_active ? 'true' : 'false' ?>">
@@ -570,7 +605,7 @@ $bags_active         = in_array($active_page ?? '', ['bag_in','bag_out','bag_adj
                     <div class="py-2 collapse-inner rounded">
                         <a class="collapse-item <?= navActive('cash_book', $active_page ?? '') ?>" href="<?= $base_url ?>modules/accounts/cash_book.php"><i class="fas fa-money-bill-wave fa-sm mr-1"></i> Cash Book</a>
                         <a class="collapse-item <?= navActive('bank_book', $active_page ?? '') ?>" href="<?= $base_url ?>modules/accounts/bank_book.php"><i class="fas fa-university fa-sm mr-1"></i> Bank Book</a>
-                        <a class="collapse-item <?= navActive('general_ledger', $active_page ?? '') ?>" href="<?= $base_url ?>modules/accounts/general_ledger.php"><i class="fas fa-book fa-sm mr-1"></i> General Ledger</a>
+
                     </div>
                 </div>
             </li>

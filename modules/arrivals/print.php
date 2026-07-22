@@ -4,6 +4,7 @@ require_once '../../includes/config.php';
 if (!isset($_SESSION['user_id'])) { header("Location: " . $base_url . "auth/login.php"); exit; }
 $page_title = 'Arrival Slip';
 require_once '../../includes/db.php';
+require_once '../../includes/functions.php';
 
 $id = (int)$_GET['id'];
 $row = $conn->query("SELECT a.*, w.name as warehouse_name, 
@@ -79,6 +80,9 @@ $charges = ($row['bag_amount']??0) + ($row['labour_charges']??0) + ($row['transp
         <tr><td class="label">Other Charges:</td><td class="amt"><?= money($row['other_charges']) ?></td></tr>
         <tr><td class="label">Total Deductions:</td><td class="amt"><?= money($charges) ?></td></tr>
         <tr class="total"><td class="label">Net Amount:</td><td class="amt net"><?= money($row['net_amount']) ?></td></tr>
+        <?php if (($row['payment_now'] ?? 0) > 0): ?>
+        <tr><td class="label">Paid on Arrival:</td><td class="amt" style="color:#1a73e8;font-weight:bold"><?= money($row['payment_now']) ?></td></tr>
+        <?php endif; ?>
     </table>
 
     <?php if ($row['notes']): ?>

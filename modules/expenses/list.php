@@ -15,7 +15,7 @@ $total = $conn->query("SELECT COALESCE(SUM(amount),0) as t FROM expenses")->fetc
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-coins mr-1"></i> Expense List</h1>
     <div>
         <a href="add.php" class="btn btn-primary btn-sm"><i class="fas fa-plus-circle mr-1"></i> Add Expense</a>
-        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+        <a href="print_list.php" class="btn btn-sm btn-info" target="_blank"><i class="fas fa-print mr-1"></i> Print Register</a>
     </div>
 </div>
 

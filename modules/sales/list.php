@@ -17,7 +17,7 @@ $result = $conn->query("SELECT s.*, c.name as customer_name FROM sales s LEFT JO
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-cash-register mr-1"></i> Sales List</h1>
     <div>
         <a href="add.php" class="btn btn-primary btn-sm"><i class="fas fa-plus-circle mr-1"></i> New Sale</a>
-        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+        <a href="print_list.php" class="btn btn-sm btn-info" target="_blank"><i class="fas fa-print mr-1"></i> Print Register</a>
     </div>
 </div>
 

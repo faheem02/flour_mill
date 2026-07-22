@@ -36,7 +36,10 @@ include '../../includes/header.php';
 ?>
 <div class="d-sm-flex align-items-center justify-content-between mb-4">
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-warehouse mr-1"></i> <?= htmlspecialchars($wh['name']) ?></h1>
-    <a href="warehouses.php" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left mr-1"></i> Back to Warehouses</a>
+    <div>
+        <a href="warehouses.php" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left mr-1"></i> Back to Warehouses</a>
+        <button class="btn btn-sm btn-primary ml-1" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+    </div>
 </div>
 
 <?= flashMessage() ?>

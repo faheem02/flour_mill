@@ -13,7 +13,7 @@ $result = $conn->query("SELECT * FROM customers ORDER BY name ASC");
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-users mr-1"></i> Customers</h1>
     <div>
         <a href="add.php" class="btn btn-primary btn-sm"><i class="fas fa-plus-circle mr-1"></i> Add Customer</a>
-        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+        <a href="print_list.php" class="btn btn-sm btn-info" target="_blank"><i class="fas fa-print mr-1"></i> Print Directory</a>
     </div>
 </div>
 

@@ -30,7 +30,7 @@ $cash_balance = $conn->query("SELECT balance FROM bank_accounts WHERE account_na
     <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-money-bill-wave mr-1"></i> Cash Book</h1>
     <div>
         <span class="font-weight-bold mr-3">Balance: Rs <?= money($cash_balance) ?></span>
-        <button class="btn btn-sm btn-primary" onclick="window.print()"><i class="fas fa-print mr-1"></i> Print</button>
+        <a href="print_cash_book.php?from=<?= urlencode($from) ?>&to=<?= urlencode($to) ?>" class="btn btn-sm btn-info" target="_blank"><i class="fas fa-print mr-1"></i> Print</a>
     </div>
 </div>
 
